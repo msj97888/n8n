@@ -79,7 +79,7 @@
     },
     {
       "parameters": {
-        "operation": "getAll",
+        "operation": "read",
         "documentId": {
           "__rl": true,
           "value": "YOUR_QUOTE_LOG_SHEET_ID",
@@ -90,9 +90,7 @@
           "value": "Sheet1",
           "mode": "name"
         },
-        "options": {
-          "returnAllRows": true
-        }
+        "options": {}
       },
       "id": "node-read-quote-log",
       "name": "Read Quote Log",
@@ -132,7 +130,7 @@
     },
     {
       "parameters": {
-        "operation": "getAll",
+        "operation": "read",
         "documentId": {
           "__rl": true,
           "value": "YOUR_AIRLINE_CONTACTS_SHEET_ID",
@@ -143,9 +141,7 @@
           "value": "Sheet1",
           "mode": "name"
         },
-        "options": {
-          "returnAllRows": true
-        }
+        "options": {}
       },
       "id": "node-read-airline-contacts",
       "name": "Read Airline Contacts",
