@@ -1,0 +1,379 @@
+{
+  "name": "1M1H RATE Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": true,
+        "mailboxId": "inbox",
+        "filters": {
+          "custom": "categories/any(c:c eq '1M1H RATE')"
+        },
+        "options": {
+          "fields": "subject,body,bodyPreview,from,receivedDateTime,id,categories"
+        }
+      },
+      "id": "node-get-many-messages",
+      "name": "Get many messages",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [300, 500],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OUTLOOK_CREDENTIAL_ID",
+          "name": "Microsoft Outlook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{$credentials.geminiApiKey}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [\n        {\n          \"text\": \"Extract air freight shipment details from this rate inquiry email body. If a field is genuinely not present, return an empty string for text fields or null for numbers. Email body:\\n\\n\" + ((($json.body && $json.body.content) ? $json.body.content : ($json.bodyPreview || '')).replace(/<[^>]+>/g, ' '))\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"responseSchema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"pol\": { \"type\": \"string\", \"description\": \"Port of loading / origin airport code, e.g. ORD\" },\n        \"pod\": { \"type\": \"string\", \"description\": \"Port of discharge / destination airport code. Empty string if not found.\" },\n        \"shipper\": { \"type\": \"string\", \"description\": \"Shipper name, or the literal word UNKNOWN if the email says unknown shipper\" },\n        \"cargoType\": { \"type\": \"string\", \"description\": \"Cargo type as written, e.g. GENERAL CARGO\" },\n        \"pieces\": { \"type\": \"string\", \"description\": \"Piece/crate count description exactly as written, e.g. '1 CRATE'\" },\n        \"dimensions\": { \"type\": \"string\", \"description\": \"Dimensions exactly as written, e.g. '65X53X65 INCHES'\" },\n        \"grossWeightKg\": { \"type\": \"number\", \"description\": \"Total gross weight in kg, numeric only\" },\n        \"chargeableWeightKg\": { \"type\": \"number\", \"description\": \"Total chargeable weight in kg, numeric only\" }\n      },\n      \"required\": [\"pol\", \"pod\", \"shipper\", \"cargoType\", \"pieces\", \"dimensions\", \"grossWeightKg\", \"chargeableWeightKg\"]\n    }\n  }\n}"
+      },
+      "id": "node-gemini-extract",
+      "name": "Gemini - Extract Shipment Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 500]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const geminiResponse = $input.item.json;\nconst rawText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;\n\nlet parsed = {};\nlet needsManualReview = false;\n\nif (!rawText) {\n  needsManualReview = true;\n} else {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e) {\n    needsManualReview = true;\n  }\n}\n\nif (!parsed.pod || String(parsed.pod).trim() === '') {\n  needsManualReview = true;\n}\n\nconst sourceEmail = $('Get many messages').item.json;\n\nreturn {\n  json: {\n    messageId: sourceEmail.id,\n    originalSubject: sourceEmail.subject,\n    pol: parsed.pol || '',\n    pod: parsed.pod || '',\n    shipper: parsed.shipper || 'UNKNOWN',\n    cargoType: parsed.cargoType || '',\n    pieces: parsed.pieces || '',\n    dimensions: parsed.dimensions || '',\n    grossWeightKg: parsed.grossWeightKg ?? '',\n    chargeableWeightKg: parsed.chargeableWeightKg ?? '',\n    needsManualReview,\n  },\n};"
+      },
+      "id": "node-parse-extraction",
+      "name": "Parse Extraction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_QUOTE_LOG_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {
+          "returnAllRows": true
+        }
+      },
+      "id": "node-read-quote-log",
+      "name": "Read Quote Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [300, 100],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function pad2(n) { return String(n).padStart(2, '0'); }\nfunction normalizeDate(raw) {\n  if (!raw) return '';\n  return new Date(raw).toISOString().slice(0, 10);\n}\n\nconst todayISO = $now.toFormat('yyyy-LL-dd');\nconst todayYYMMDD = $now.toFormat('yyLLdd');\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\n\n// 1) Quote number: highest existing sequence for today, + 1\nlet maxSeq = 0;\nfor (const row of logRows) {\n  if (normalizeDate(row['DATE']) !== todayISO) continue;\n  const match = /^AECQ(\\d{6})(\\d{2})$/.exec(row['QUOTE NUMBER'] || '');\n  if (match && match[1] === todayYYMMDD) {\n    const seq = parseInt(match[2], 10);\n    if (seq > maxSeq) maxSeq = seq;\n  }\n}\nconst quoteNumber = `AECQ${todayYYMMDD}${pad2(maxSeq + 1)}`;\n\n// 2) Most recent airline(s) for this POD\nconst current = $input.item.json;\nlet airlineCodes = [];\nlet fallbackReason = null;\n\nif (current.needsManualReview) {\n  airlineCodes = [null];\n  fallbackReason = 'Could not extract POD automatically - flagged for manual review';\n} else {\n  const matches = logRows.filter(\n    r => (r['DEST'] || '').trim().toUpperCase() === current.pod.trim().toUpperCase()\n  );\n\n  if (matches.length === 0) {\n    airlineCodes = [null];\n    fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n  } else {\n    matches.sort((a, b) => new Date(normalizeDate(b['DATE'])) - new Date(normalizeDate(a['DATE'])));\n    const mostRecentDate = normalizeDate(matches[0]['DATE']);\n    const mostRecentRows = matches.filter(r => normalizeDate(r['DATE']) === mostRecentDate);\n\n    const codes = new Set();\n    for (const row of mostRecentRows) {\n      (row['AIRLINE'] || '').split('/').forEach(code => {\n        const trimmed = code.trim();\n        if (trimmed) codes.add(trimmed);\n      });\n    }\n    airlineCodes = Array.from(codes);\n  }\n}\n\nreturn {\n  json: {\n    ...current,\n    quoteNumber,\n    airlineCodes,\n    fallbackReason,\n  },\n};"
+      },
+      "id": "node-compute-quote",
+      "name": "Compute Quote Number + Airlines",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 500]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "airlineCodes",
+        "options": {
+          "destinationFieldName": "airlineCode"
+        }
+      },
+      "id": "node-split-out-airlines",
+      "name": "Split Out Airlines",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1500, 500]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_AIRLINE_CONTACTS_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {
+          "returnAllRows": true
+        }
+      },
+      "id": "node-read-airline-contacts",
+      "name": "Read Airline Contacts",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [300, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const current = $input.item.json;\nconst contacts = $('Read Airline Contacts').all().map(i => i.json);\n\nlet contactEmail = '';\nif (current.airlineCode) {\n  const match = contacts.find(\n    c => (c['AIRLINE CODE'] || '').trim().toUpperCase() === current.airlineCode.trim().toUpperCase()\n  );\n  if (match) contactEmail = match['EMAIL ADDRESS'] || '';\n}\n\nlet remark;\nif (current.fallbackReason) {\n  remark = current.fallbackReason;\n} else if (!contactEmail) {\n  remark = `No contact email on file for airline code \"${current.airlineCode}\"`;\n} else {\n  remark = '';\n}\n\nfunction buildSubject() {\n  const cargoSegment = current.cargoType && current.cargoType.toUpperCase() === 'GENERAL CARGO' ? ' / GENERAL CARGO' : '';\n  const airlineTag = current.airlineCode || 'UNASSIGNED';\n  return `[${airlineTag}] ${current.pol}-${current.pod || '?'} / RATE QUOTE${cargoSegment} / ${current.quoteNumber}`;\n}\n\nfunction buildBody() {\n  const shipperLine = current.shipper && current.shipper.toUpperCase() !== 'UNKNOWN'\n    ? current.shipper.toUpperCase() + ' SHIPPER'\n    : 'UNKNOWN SHIPPER';\n  return [\n    'Hello team,',\n    '',\n    'Please check the below shipment and provide us with rate and flight frequency.',\n    '',\n    `* POL : ${current.pol}`,\n    `* POD : ${current.pod}`,\n    `* ${shipperLine}`,\n    `* ${current.cargoType}`,\n    `* TOTAL ${current.pieces}`,\n    `* ${current.dimensions}`,\n    `* TOTAL G.W ${current.grossWeightKg} KGS`,\n    `* TOTAL C.W ${current.chargeableWeightKg} KGS`,\n    '',\n    'Thank you.',\n  ].join('\\n');\n}\n\nreturn {\n  json: {\n    ...current,\n    to: contactEmail,\n    subject: buildSubject(),\n    body: buildBody(),\n    remark,\n  },\n};"
+      },
+      "id": "node-build-draft-fields",
+      "name": "Build Draft Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, 500]
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "operation": "create",
+        "subject": "={{$json.subject}}",
+        "bodyContent": "={{$json.body}}",
+        "bodyContentType": "Text",
+        "toRecipients": "={{$json.to}}",
+        "additionalFields": {}
+      },
+      "id": "node-create-draft",
+      "name": "Create Draft",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [2100, 500],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OUTLOOK_CREDENTIAL_ID",
+          "name": "Microsoft Outlook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_QUOTE_LOG_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "DATE": "={{$now.toFormat('yyyy-LL-dd')}}",
+            "EMAIL SUBJECT": "={{$json.originalSubject}}",
+            "QUOTE NUMBER": "={{$json.quoteNumber}}",
+            "AGENT/CUSTOMER": "={{$json.shipper}}",
+            "AIRLINE": "={{$json.airlineCode || ''}}",
+            "DEST": "={{$json.pod}}",
+            "CW (KGS)": "={{$json.chargeableWeightKg}}",
+            "SENT BY": "",
+            "STATUS": "DRAFT",
+            "REMARK": "={{$json.remark}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-log-quote-row",
+      "name": "Log Quote Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2400, 500],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "update",
+        "messageId": "={{$json.messageId}}",
+        "updateFields": {
+          "categories": "1M1H RATE - PROCESSED"
+        }
+      },
+      "id": "node-update-message",
+      "name": "Update a message",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [2700, 500],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OUTLOOK_CREDENTIAL_ID",
+          "name": "Microsoft Outlook account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Quote Log",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Airline Contacts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get many messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many messages": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Extract Shipment Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Extract Shipment Details": {
+      "main": [
+        [
+          {
+            "node": "Parse Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Extraction": {
+      "main": [
+        [
+          {
+            "node": "Compute Quote Number + Airlines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Quote Number + Airlines": {
+      "main": [
+        [
+          {
+            "node": "Split Out Airlines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Airlines": {
+      "main": [
+        [
+          {
+            "node": "Build Draft Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Draft Fields": {
+      "main": [
+        [
+          {
+            "node": "Create Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Draft": {
+      "main": [
+        [
+          {
+            "node": "Log Quote Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Quote Row": {
+      "main": [
+        [
+          {
+            "node": "Update a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "n8nVersion": "1.0.0"
+  }
+}
