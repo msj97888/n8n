@@ -208,12 +208,12 @@
             "EMAIL SUBJECT": "={{$json.originalSubject}}",
             "QUOTE NUMBER": "={{$json.quoteNumber}}",
             "AGENT/CUSTOMER": "={{$json.shipper}}",
-            "AIRLINE": "={{$json.airlineCode || ''}}",
+            "AIRLINE": "={{$json.airlineCodes.filter(Boolean).join(', ')}}",
             "DEST": "={{$json.pod}}",
             "CW (KGS)": "={{$json.chargeableWeightKg}}",
             "SENT BY": "",
             "STATUS": "DRAFT",
-            "REMARK": "={{$json.remark}}"
+            "REMARK": "={{$json.fallbackReason || ''}}"
           }
         },
         "options": {}
@@ -311,6 +311,17 @@
       "main": [
         [
           {
+            "node": "Log Quote Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Quote Row": {
+      "main": [
+        [
+          {
             "node": "Split Out Airlines",
             "type": "main",
             "index": 0
@@ -341,17 +352,6 @@
       ]
     },
     "Create Draft": {
-      "main": [
-        [
-          {
-            "node": "Log Quote Row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Quote Row": {
       "main": [
         [
           {
