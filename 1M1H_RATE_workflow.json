@@ -45,6 +45,34 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "condition-category-check",
+              "leftValue": "={{Array.isArray($json.categories) && $json.categories.includes('1M1H RATE')}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-filter-category",
+      "name": "Filter 1M1H RATE",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [550, 500]
+    },
+    {
+      "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const email = $input.item.json;\nconst rawBody = (email.body && email.body.content)\n  ? email.body.content\n  : (email.bodyPreview || '');\nconst cleanBody = rawBody.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n\nconst payload = {\n  contents: [\n    {\n      role: 'user',\n      parts: [\n        {\n          text: 'Extract air freight shipment details from this rate inquiry email body. If a field is genuinely not present, return an empty string for text fields or null for numbers. Email body:\\n\\n' + cleanBody\n        }\n      ]\n    }\n  ],\n  generationConfig: {\n    responseMimeType: 'application/json',\n    responseSchema: {\n      type: 'object',\n      properties: {\n        pol:                { type: 'string' },\n        pod:                { type: 'string' },\n        shipper:            { type: 'string' },\n        cargoType:          { type: 'string' },\n        pieces:             { type: 'string' },\n        piecesCount:        { type: 'number' },\n        dimensions:         { type: 'string' },\n        dimL:               { type: 'number' },\n        dimW:               { type: 'number' },\n        dimH:               { type: 'number' },\n        dimUnit:            { type: 'string' },\n        grossWeightKg:      { type: 'number' },\n        chargeableWeightKg: { type: 'number' }\n      },\n      required: [\n        'pol', 'pod', 'shipper', 'cargoType',\n        'pieces', 'piecesCount', 'dimensions',\n        'dimL', 'dimW', 'dimH', 'dimUnit',\n        'grossWeightKg', 'chargeableWeightKg'\n      ]\n    }\n  }\n};\n\nreturn {\n  json: {\n    emailId: email.id,\n    emailSubject: email.subject,\n    geminiPayload: payload\n  }\n};"
       },
@@ -52,7 +80,7 @@
       "name": "Build Gemini Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 500]
+      "position": [800, 500]
     },
     {
       "parameters": {
@@ -76,18 +104,18 @@
       "name": "Gemini - Extract Shipment Details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 500]
+      "position": [1050, 500]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const geminiResponse = $input.item.json;\nconst rawText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;\n\nlet parsed = {};\nlet needsManualReview = false;\n\nif (!rawText) {\n  needsManualReview = true;\n} else {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e) {\n    needsManualReview = true;\n  }\n}\n\nif (!parsed.pod || String(parsed.pod).trim() === '') {\n  needsManualReview = true;\n}\n\n// Compute chargeable weight if not explicitly stated in the email\nlet chargeableWeightKg = parsed.chargeableWeightKg ?? null;\nif (chargeableWeightKg === null) {\n  const L = parsed.dimL, W = parsed.dimW, H = parsed.dimH;\n  const unit = (parsed.dimUnit || '').toLowerCase().trim();\n  const pieces = parsed.piecesCount || 1;\n  const gw = parsed.grossWeightKg || 0;\n\n  if (L && W && H) {\n    const toIn = unit === 'cm' ? (v) => v / 2.54 : (v) => v;\n    const vw = (toIn(L) * toIn(W) * toIn(H) * pieces) / 166 / 2.2046;\n    chargeableWeightKg = Math.round(Math.max(vw, gw) * 100) / 100;\n  } else {\n    chargeableWeightKg = gw || '';\n  }\n}\n\nconst sourceEmail = $('Build Gemini Payload').item.json;\n\nreturn {\n  json: {\n    messageId: sourceEmail.emailId,\n    originalSubject: sourceEmail.emailSubject,\n    pol: parsed.pol || '',\n    pod: parsed.pod || '',\n    shipper: parsed.shipper || 'UNKNOWN',\n    cargoType: parsed.cargoType || '',\n    pieces: parsed.pieces || '',\n    dimensions: parsed.dimensions || '',\n    grossWeightKg: parsed.grossWeightKg ?? '',\n    chargeableWeightKg,\n    needsManualReview,\n  },\n};"
+        "jsCode": "const geminiResponse = $input.item.json;\nconst rawText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;\n\nlet parsed = {};\nlet needsManualReview = false;\n\nif (!rawText) {\n  needsManualReview = true;\n} else {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e) {\n    needsManualReview = true;\n  }\n}\n\nif (!parsed.pod || String(parsed.pod).trim() === '') {\n  needsManualReview = true;\n}\n\nlet chargeableWeightKg = parsed.chargeableWeightKg ?? null;\nif (chargeableWeightKg === null) {\n  const L = parsed.dimL, W = parsed.dimW, H = parsed.dimH;\n  const unit = (parsed.dimUnit || '').toLowerCase().trim();\n  const pieces = parsed.piecesCount || 1;\n  const gw = parsed.grossWeightKg || 0;\n\n  if (L && W && H) {\n    const toIn = unit === 'cm' ? (v) => v / 2.54 : (v) => v;\n    const vw = (toIn(L) * toIn(W) * toIn(H) * pieces) / 166 / 2.2046;\n    chargeableWeightKg = Math.round(Math.max(vw, gw) * 100) / 100;\n  } else {\n    chargeableWeightKg = gw || '';\n  }\n}\n\nconst sourceEmail = $('Build Gemini Payload').item.json;\n\nreturn {\n  json: {\n    messageId: sourceEmail.emailId,\n    originalSubject: sourceEmail.emailSubject,\n    pol: parsed.pol || '',\n    pod: parsed.pod || '',\n    shipper: parsed.shipper || 'UNKNOWN',\n    cargoType: parsed.cargoType || '',\n    pieces: parsed.pieces || '',\n    dimensions: parsed.dimensions || '',\n    grossWeightKg: parsed.grossWeightKg ?? '',\n    chargeableWeightKg,\n    needsManualReview,\n  },\n};"
       },
       "id": "node-parse-extraction",
       "name": "Parse Extraction",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 500]
+      "position": [1300, 500]
     },
     {
       "parameters": {
@@ -119,13 +147,13 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "function pad2(n) { return String(n).padStart(2, '0'); }\nfunction normalizeDate(raw) {\n  if (!raw) return '';\n  return new Date(raw).toISOString().slice(0, 10);\n}\n\nconst todayISO = $now.toFormat('yyyy-LL-dd');\nconst todayYYMMDD = $now.toFormat('yyLLdd');\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\n\nlet maxSeq = 0;\nfor (const row of logRows) {\n  if (normalizeDate(row['DATE']) !== todayISO) continue;\n  const match = /^AECQ(\\d{6})(\\d{2})$/.exec(row['QUOTE NUMBER'] || '');\n  if (match && match[1] === todayYYMMDD) {\n    const seq = parseInt(match[2], 10);\n    if (seq > maxSeq) maxSeq = seq;\n  }\n}\nconst quoteNumber = `AECQ${todayYYMMDD}${pad2(maxSeq + 1)}`;\n\nconst current = $input.item.json;\nlet airlineCodes = [];\nlet fallbackReason = null;\n\nif (current.needsManualReview) {\n  airlineCodes = [null];\n  fallbackReason = 'Could not extract POD automatically - flagged for manual review';\n} else {\n  const matches = logRows.filter(\n    r => (r['DEST'] || '').trim().toUpperCase() === current.pod.trim().toUpperCase()\n  );\n\n  if (matches.length === 0) {\n    airlineCodes = [null];\n    fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n  } else {\n    matches.sort((a, b) => new Date(normalizeDate(b['DATE'])) - new Date(normalizeDate(a['DATE'])));\n    const mostRecentDate = normalizeDate(matches[0]['DATE']);\n    const mostRecentRows = matches.filter(r => normalizeDate(r['DATE']) === mostRecentDate);\n\n    const codes = new Set();\n    for (const row of mostRecentRows) {\n      (row['AIRLINE'] || '').split(',').forEach(code => {\n        const trimmed = code.trim();\n        if (trimmed) codes.add(trimmed);\n      });\n    }\n    airlineCodes = Array.from(codes);\n  }\n}\n\nreturn {\n  json: {\n    ...current,\n    quoteNumber,\n    airlineCodes,\n    fallbackReason,\n  },\n};"
+        "jsCode": "function pad2(n) { return String(n).padStart(2, '0'); }\nfunction normalizeDate(raw) {\n  if (!raw) return '';\n  return new Date(raw).toISOString().slice(0, 10);\n}\n\nconst todayISO = $now.toFormat('yyyy-LL-dd');\nconst todayYYMMDD = $now.toFormat('yyLLdd');\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\n\nlet maxSeq = 0;\nfor (const row of logRows) {\n  if (normalizeDate(row['DATE']) !== todayISO) continue;\n  const match = /^AECQ(\\d{6})(\\d{2})$/.exec(row['QUOTE NUMBER'] || '');\n  if (match && match[1] === todayYYMMDD) {\n    const seq = parseInt(match[2], 10);\n    if (seq > maxSeq) maxSeq = seq;\n  }\n}\nconst quoteNumber = `AECQ${todayYYMMDD}${pad2(maxSeq + 1)}`;\n\nconst current = $input.item.json;\nlet airlineCodes = [];\nlet fallbackReason = null;\n\nif (current.needsManualReview) {\n  airlineCodes = [''];\n  fallbackReason = 'Could not extract POD automatically - flagged for manual review';\n} else {\n  const matches = logRows.filter(\n    r => (r['DEST'] || '').trim().toUpperCase() === current.pod.trim().toUpperCase()\n  );\n\n  if (matches.length === 0) {\n    airlineCodes = [''];\n    fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n  } else {\n    matches.sort((a, b) => new Date(normalizeDate(b['DATE'])) - new Date(normalizeDate(a['DATE'])));\n    const mostRecentDate = normalizeDate(matches[0]['DATE']);\n    const mostRecentRows = matches.filter(r => normalizeDate(r['DATE']) === mostRecentDate);\n\n    const codes = new Set();\n    for (const row of mostRecentRows) {\n      (row['AIRLINE'] || '').split(',').forEach(code => {\n        const trimmed = code.trim();\n        if (trimmed) codes.add(trimmed);\n      });\n    }\n    airlineCodes = Array.from(codes);\n    if (airlineCodes.length === 0) {\n      airlineCodes = [''];\n      fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...current,\n    quoteNumber,\n    airlineCodes,\n    fallbackReason,\n  },\n};"
       },
       "id": "node-compute-quote",
       "name": "Compute Quote Number + Airlines",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1500, 500]
+      "position": [1550, 500]
     },
     {
       "parameters": {
@@ -180,7 +208,7 @@
       "name": "Split Out Airlines",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [2100, 500]
+      "position": [2050, 500]
     },
     {
       "parameters": {
@@ -218,7 +246,7 @@
       "name": "Build Draft Fields",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2400, 500]
+      "position": [2300, 500]
     },
     {
       "parameters": {
@@ -234,7 +262,7 @@
       "name": "Create Draft",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [2700, 500],
+      "position": [2550, 500],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
@@ -255,7 +283,7 @@
       "name": "Update a message",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [3000, 500],
+      "position": [2800, 500],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
@@ -287,6 +315,17 @@
       ]
     },
     "Get many messages": {
+      "main": [
+        [
+          {
+            "node": "Filter 1M1H RATE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter 1M1H RATE": {
       "main": [
         [
           {
