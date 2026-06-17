@@ -69,7 +69,8 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={{$json.geminiPayload}}"
+        "specifyBody": "json",
+        "jsonBody": "={{$json.geminiPayload}}"
       },
       "id": "node-gemini-extract",
       "name": "Gemini - Extract Shipment Details",
