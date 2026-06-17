@@ -164,7 +164,7 @@
       "name": "Prepare Log Row",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1800, 500]
+      "position": [1800, 200]
     },
     {
       "parameters": {
@@ -189,7 +189,7 @@
       "name": "Log Quote Row",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [2050, 500],
+      "position": [2050, 200],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GSHEETS_CREDENTIAL_ID",
@@ -376,6 +376,11 @@
             "node": "Prepare Log Row",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Split Out Airlines",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -385,17 +390,6 @@
         [
           {
             "node": "Log Quote Row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Quote Row": {
-      "main": [
-        [
-          {
-            "node": "Split Out Airlines",
             "type": "main",
             "index": 0
           }
