@@ -208,7 +208,7 @@
       "name": "Split Out Airlines",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [2050, 500]
+      "position": [2300, 500]
     },
     {
       "parameters": {
@@ -246,7 +246,7 @@
       "name": "Build Draft Fields",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2300, 500]
+      "position": [2550, 500]
     },
     {
       "parameters": {
@@ -262,7 +262,7 @@
       "name": "Create Draft",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [2550, 500],
+      "position": [2800, 500],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
@@ -283,7 +283,7 @@
       "name": "Update a message",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [2800, 500],
+      "position": [3050, 500],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
