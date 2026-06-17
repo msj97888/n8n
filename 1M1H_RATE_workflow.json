@@ -199,8 +199,8 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const current = $input.item.json;\nconst codes = (current.airlineCodes && current.airlineCodes.length > 0)\n  ? current.airlineCodes\n  : ['UNASSIGNED'];\nreturn codes.map(code => ({\n  json: { ...current, airlineCode: code || 'UNASSIGNED' }\n}));"
+        "mode": "runOnceForAllItems",
+        "jsCode": "const result = [];\nfor (const item of $input.all()) {\n  const current = item.json;\n  const codes = (current.airlineCodes && current.airlineCodes.length > 0)\n    ? current.airlineCodes\n    : ['UNASSIGNED'];\n  for (const code of codes) {\n    result.push({ json: { ...current, airlineCode: code || 'UNASSIGNED' } });\n  }\n}\nreturn result;"
       },
       "id": "node-split-out-airlines",
       "name": "Split Out Airlines",
