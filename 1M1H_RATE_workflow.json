@@ -147,13 +147,24 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "function pad2(n) { return String(n).padStart(2, '0'); }\nfunction normalizeDate(raw) {\n  if (!raw) return '';\n  return new Date(raw).toISOString().slice(0, 10);\n}\n\nconst todayISO = $now.toFormat('yyyy-LL-dd');\nconst todayYYMMDD = $now.toFormat('yyLLdd');\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\n\nlet maxSeq = 0;\nfor (const row of logRows) {\n  if (normalizeDate(row['DATE']) !== todayISO) continue;\n  const match = /^AECQ(\\d{6})(\\d{2})$/.exec(row['QUOTE NUMBER'] || '');\n  if (match && match[1] === todayYYMMDD) {\n    const seq = parseInt(match[2], 10);\n    if (seq > maxSeq) maxSeq = seq;\n  }\n}\nconst quoteNumber = `AECQ${todayYYMMDD}${pad2(maxSeq + 1)}`;\n\nconst current = $input.item.json;\nlet airlineCodes = [];\nlet fallbackReason = null;\n\nif (current.needsManualReview) {\n  airlineCodes = [''];\n  fallbackReason = 'Could not extract POD automatically - flagged for manual review';\n} else {\n  const matches = logRows.filter(\n    r => (r['DEST'] || '').trim().toUpperCase() === current.pod.trim().toUpperCase()\n  );\n\n  if (matches.length === 0) {\n    airlineCodes = [''];\n    fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n  } else {\n    matches.sort((a, b) => new Date(normalizeDate(b['DATE'])) - new Date(normalizeDate(a['DATE'])));\n    const mostRecentDate = normalizeDate(matches[0]['DATE']);\n    const mostRecentRows = matches.filter(r => normalizeDate(r['DATE']) === mostRecentDate);\n\n    const codes = new Set();\n    for (const row of mostRecentRows) {\n      (row['AIRLINE'] || '').split(',').forEach(code => {\n        const trimmed = code.trim();\n        if (trimmed) codes.add(trimmed);\n      });\n    }\n    airlineCodes = Array.from(codes);\n    if (airlineCodes.length === 0) {\n      airlineCodes = [''];\n      fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...current,\n    quoteNumber,\n    airlineCodes,\n    fallbackReason,\n  },\n};"
+        "jsCode": "function pad2(n) { return String(n).padStart(2, '0'); }\nfunction normalizeDate(raw) {\n  if (!raw) return '';\n  return new Date(raw).toISOString().slice(0, 10);\n}\n\nconst todayISO = $now.toFormat('yyyy-LL-dd');\nconst todayYYMMDD = $now.toFormat('yyLLdd');\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\n\nlet maxSeq = 0;\nfor (const row of logRows) {\n  if (normalizeDate(row['DATE']) !== todayISO) continue;\n  const match = /^AECQ(\\d{6})(\\d{2})$/.exec(row['QUOTE NUMBER'] || '');\n  if (match && match[1] === todayYYMMDD) {\n    const seq = parseInt(match[2], 10);\n    if (seq > maxSeq) maxSeq = seq;\n  }\n}\nconst quoteNumber = `AECQ${todayYYMMDD}${pad2(maxSeq + 1)}`;\n\nconst current = $input.item.json;\nlet airlineCodes = [];\nlet fallbackReason = null;\n\nif (current.needsManualReview) {\n  airlineCodes = ['UNASSIGNED'];\n  fallbackReason = 'Could not extract POD automatically - flagged for manual review';\n} else {\n  const matches = logRows.filter(\n    r => (r['DEST'] || '').trim().toUpperCase() === current.pod.trim().toUpperCase()\n  );\n\n  if (matches.length === 0) {\n    airlineCodes = ['UNASSIGNED'];\n    fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n  } else {\n    matches.sort((a, b) => new Date(normalizeDate(b['DATE'])) - new Date(normalizeDate(a['DATE'])));\n    const mostRecentDate = normalizeDate(matches[0]['DATE']);\n    const mostRecentRows = matches.filter(r => normalizeDate(r['DATE']) === mostRecentDate);\n\n    const codes = new Set();\n    for (const row of mostRecentRows) {\n      (row['AIRLINE'] || '').split(',').forEach(code => {\n        const trimmed = code.trim();\n        if (trimmed) codes.add(trimmed);\n      });\n    }\n    airlineCodes = Array.from(codes);\n    if (airlineCodes.length === 0) {\n      airlineCodes = ['UNASSIGNED'];\n      fallbackReason = `No airline history on file for POD \"${current.pod}\"`;\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...current,\n    quoteNumber,\n    airlineCodes,\n    fallbackReason,\n  },\n};"
       },
       "id": "node-compute-quote",
       "name": "Compute Quote Number + Airlines",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1550, 500]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const c = $input.item.json;\nreturn {\n  json: {\n    // Preserve all fields so Split Out has airlineCodes downstream\n    messageId: c.messageId,\n    originalSubject: c.originalSubject,\n    quoteNumber: c.quoteNumber,\n    shipper: c.shipper,\n    airlineCodes: c.airlineCodes,\n    pod: c.pod,\n    pol: c.pol,\n    chargeableWeightKg: c.chargeableWeightKg,\n    grossWeightKg: c.grossWeightKg,\n    cargoType: c.cargoType,\n    pieces: c.pieces,\n    dimensions: c.dimensions,\n    fallbackReason: c.fallbackReason,\n    needsManualReview: c.needsManualReview,\n    // Exact sheet column names for autoMapInputData\n    DATE: $now.toFormat('yyyy-LL-dd'),\n    'EMAIL SUBJECT': c.originalSubject || '',\n    'QUOTE NUMBER': c.quoteNumber || '',\n    'AGENT/CUSTOMER': c.shipper || '',\n    AIRLINE: (c.airlineCodes || []).filter(a => a && a !== 'UNASSIGNED').join(', '),\n    DEST: c.pod || '',\n    'CW (KGS)': c.chargeableWeightKg != null ? String(c.chargeableWeightKg) : '',\n    'SENT BY': '',\n    STATUS: 'DRAFT',\n    REMARK: c.fallbackReason || ''\n  }\n};"
+      },
+      "id": "node-prepare-log-row",
+      "name": "Prepare Log Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, 500]
     },
     {
       "parameters": {
@@ -169,19 +180,8 @@
           "mode": "name"
         },
         "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "DATE": "={{$now.toFormat('yyyy-LL-dd')}}",
-            "EMAIL SUBJECT": "={{$json.originalSubject}}",
-            "QUOTE NUMBER": "={{$json.quoteNumber}}",
-            "AGENT/CUSTOMER": "={{$json.shipper}}",
-            "AIRLINE": "={{$json.airlineCodes.filter(Boolean).join(', ')}}",
-            "DEST": "={{$json.pod}}",
-            "CW (KGS)": "={{$json.chargeableWeightKg}}",
-            "SENT BY": "",
-            "STATUS": "DRAFT",
-            "REMARK": "={{$json.fallbackReason || ''}}"
-          }
+          "mappingMode": "autoMapInputData",
+          "value": {}
         },
         "options": {}
       },
@@ -189,7 +189,7 @@
       "name": "Log Quote Row",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [1800, 500],
+      "position": [2050, 500],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GSHEETS_CREDENTIAL_ID",
@@ -370,6 +370,17 @@
       ]
     },
     "Compute Quote Number + Airlines": {
+      "main": [
+        [
+          {
+            "node": "Prepare Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Log Row": {
       "main": [
         [
           {
