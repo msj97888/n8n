@@ -23,10 +23,8 @@
         "resource": "message",
         "operation": "getAll",
         "returnAll": true,
-        "mailboxId": "inbox",
-        "filters": {
-          "custom": "categories/any(c:c eq '1M1H RATE')"
-        },
+        "mailboxId": "YOUR_FOLDER_ID",
+        "filters": {},
         "options": {
           "fields": "subject,body,bodyPreview,from,receivedDateTime,id,categories"
         }
@@ -42,34 +40,6 @@
           "name": "Microsoft Outlook account"
         }
       }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "condition-category-check",
-              "leftValue": "={{Array.isArray($json.categories) && $json.categories.includes('1M1H RATE')}}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        }
-      },
-      "id": "node-filter-category",
-      "name": "Filter 1M1H RATE",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [550, 500]
     },
     {
       "parameters": {
@@ -313,17 +283,6 @@
       ]
     },
     "Get many messages": {
-      "main": [
-        [
-          {
-            "node": "Filter 1M1H RATE",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Filter 1M1H RATE": {
       "main": [
         [
           {
