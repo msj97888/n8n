@@ -52,7 +52,7 @@
           "parameters": [
             {
               "name": "x-goog-api-key",
-              "value": "={{$credentials.geminiApiKey}}"
+              "value": "YOUR_GEMINI_API_KEY"
             }
           ]
         },
@@ -190,7 +190,7 @@
     },
     {
       "parameters": {
-        "operation": "appendOrUpdate",
+        "operation": "append",
         "documentId": {
           "__rl": true,
           "value": "YOUR_QUOTE_LOG_SHEET_ID",
