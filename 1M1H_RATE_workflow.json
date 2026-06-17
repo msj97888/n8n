@@ -245,7 +245,7 @@
       "parameters": {
         "resource": "message",
         "operation": "update",
-        "messageId": "={{$json.messageId}}",
+        "messageId": "={{$('Build Draft Fields').item.json.messageId}}",
         "updateFields": {
           "categories": "1M1H RATE - PROCESSED"
         }
