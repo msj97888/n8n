@@ -199,15 +199,13 @@
     },
     {
       "parameters": {
-        "fieldToSplitOut": "airlineCodes",
-        "options": {
-          "destinationFieldName": "airlineCode"
-        }
+        "mode": "runOnceForEachItem",
+        "jsCode": "const current = $input.item.json;\nconst codes = (current.airlineCodes && current.airlineCodes.length > 0)\n  ? current.airlineCodes\n  : ['UNASSIGNED'];\nreturn codes.map(code => ({\n  json: { ...current, airlineCode: code || 'UNASSIGNED' }\n}));"
       },
       "id": "node-split-out-airlines",
       "name": "Split Out Airlines",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [2300, 500]
     },
     {
@@ -276,7 +274,7 @@
         "operation": "update",
         "messageId": "={{$('Build Draft Fields').item.json.messageId}}",
         "updateFields": {
-          "categories": "1M1H RATE - PROCESSED"
+          "categories": ["1M1H RATE - PROCESSED"]
         }
       },
       "id": "node-update-message",
