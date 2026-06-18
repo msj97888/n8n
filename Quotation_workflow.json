@@ -16,7 +16,10 @@
       "name": "Poll Quotation Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 300]
+      "position": [
+        0,
+        300
+      ]
     },
     {
       "parameters": {
@@ -37,7 +40,10 @@
       "name": "Read Quote Log",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [250, 100],
+      "position": [
+        250,
+        100
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GSHEETS_CREDENTIAL_ID",
@@ -64,7 +70,10 @@
       "name": "Read Markup Config",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GSHEETS_CREDENTIAL_ID",
@@ -87,7 +96,10 @@
       "name": "Get Rate Emails",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [250, 500],
+      "position": [
+        250,
+        500
+      ],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
@@ -104,7 +116,10 @@
       "name": "Filter Unprocessed Rate Emails",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 500]
+      "position": [
+        500,
+        500
+      ]
     },
     {
       "parameters": {
@@ -115,7 +130,10 @@
       "name": "Build Gemini Rate Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [750, 500]
+      "position": [
+        750,
+        500
+      ]
     },
     {
       "parameters": {
@@ -139,29 +157,38 @@
       "name": "Gemini - Extract Rates",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 500]
+      "position": [
+        1000,
+        500
+      ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "function col(row, name) {\n  const t = name.trim().toUpperCase();\n  for (const [k, v] of Object.entries(row)) {\n    if (k.trim().toUpperCase() === t) return v == null ? '' : String(v);\n  }\n  return '';\n}\n\nconst logRows    = $('Read Quote Log').all().map(i => i.json);\nconst markupRows = $('Read Markup Config').all().map(i => i.json);\nconst emailItems = $('Build Gemini Rate Payload').all();\nconst geminiItems = $input.all();\n\n// Markup config: rows with columns WEIGHT BREAK | MARKUP\nconst minChargeRow = markupRows.find(r => col(r,'WEIGHT BREAK').toUpperCase() === 'MIN CHARGE');\nconst minCharge = minChargeRow ? (parseFloat(col(minChargeRow,'MARKUP')) || 175) : 175;\n\nconst breaks = markupRows\n  .filter(r => !isNaN(parseFloat(col(r,'WEIGHT BREAK'))))\n  .map(r => ({ wt: parseFloat(col(r,'WEIGHT BREAK')), markup: parseFloat(col(r,'MARKUP')) }))\n  .sort((a,b) => a.wt - b.wt);\n\nfunction getMarkupRate(cw) {\n  const billable = Math.max(45, cw);\n  let rate = breaks.length > 0 ? breaks[0].markup : 2.15;\n  for (const b of breaks) {\n    if (billable >= b.wt) rate = b.markup;\n  }\n  return (rate * billable) < minCharge ? minCharge / billable : rate;\n}\n\n// These formulas use ROW() so they work at any position in the sheet\nconst FORMULA_COST  = '=INDIRECT(\"B\"&ROW())*INDIRECT(\"C\"&ROW())';\nconst FORMULA_TOTAL = '=SUM(INDIRECT(\"D\"&(ROW()-8)&\":D\"&(ROW()-1)))';\n\nconst result = [];\n\nfor (let i = 0; i < geminiItems.length; i++) {\n  const gemini    = geminiItems[i].json;\n  const emailData = emailItems[i] ? emailItems[i].json : {};\n\n  const rawText = gemini?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  let rates = { airFreightRatePerKg:0, isAllIn:false, fuelSurchargePerKg:0, securitySurchargePerKg:0, screeningFeePerKg:0, transitTime:'' };\n  try {\n    const cleaned = rawText.replace(/^```json\\s*/i,'').replace(/```\\s*$/i,'').trim();\n    rates = { ...rates, ...JSON.parse(cleaned) };\n  } catch(e) {}\n\n  const quoteNumber = emailData.quoteNumber || '';\n  const logRow = logRows.find(r => col(r,'QUOTE NUMBER').trim() === quoteNumber.trim());\n\n  const pod         = logRow ? col(logRow,'DEST')  : '';\n  const cw          = logRow ? (parseFloat(col(logRow,'CW (KGS)')) || 0) : 0;\n  const airlineCode = logRow ? col(logRow,'AIRLINE').split(',')[0].trim() : '';\n\n  const billableCW = Math.max(45, cw);\n  const markupRate = getMarkupRate(cw);\n  const sellingAirFreight = Math.round((( parseFloat(rates.airFreightRatePerKg) || 0) + markupRate) * 100) / 100;\n\n  const fuelRate   = rates.isAllIn ? 0 : (parseFloat(rates.fuelSurchargePerKg)     || 0);\n  const secRate    = rates.isAllIn ? 0 : (parseFloat(rates.securitySurchargePerKg) || 0);\n  const screenRate = parseFloat(rates.screeningFeePerKg) || 0;\n  const transitTime = rates.transitTime || '';\n\n  const pol   = 'ORD';\n  const route = pod ? `ORD - ${pod}` : 'ORD -';\n\n  // Each inner array maps to columns A, B, C, D, E, F\n  const rows = [\n    [quoteNumber, 'PENDING', '', '', '', ''],\n    [],\n    ['L (INCHES)', 'W (INCHES)', 'H (INCHES)', 'PCS', 'GROSS WEIGHT', 'CHARGEABLE WEIGHT'],\n    ['', '', '', '', '', billableCW ? `${billableCW} KGS` : ''],\n    [],\n    ['ESTIMATED COSTS (AIR GENERAL CARGO 1M1H Service)', '', '', '', '', ''],\n    [`POL : ${pol}`, '', '', '', '', ''],\n    [`POD : ${pod}`, '', '', '', '', ''],\n    [`AIR CARRIER : ${airlineCode}`, '', '', '', '', ''],\n    [`ROUTE : ${route}`, '', '', '', '', ''],\n    [`TRANSIT TIME : ${transitTime} DAYS`, '', '', '', '', ''],\n    [],\n    ['SUBJECT', 'RATE', 'UNIT', 'COST', '', ''],\n    ['INLAND PICKUP CHARGE', '', '', FORMULA_COST, '', ''],\n    ['AIR FREIGHT CHARGE', sellingAirFreight, billableCW, FORMULA_COST, '', ''],\n    ['FUEL SURCHARGE', fuelRate, fuelRate > 0 ? billableCW : 0, FORMULA_COST, '', ''],\n    ['SECURITY SURCHARGE', secRate, secRate > 0 ? billableCW : 0, FORMULA_COST, '', ''],\n    ['SCREENING SURCHARGE', screenRate, screenRate > 0 ? billableCW : 0, FORMULA_COST, '', ''],\n    ['AIRPORT TRANSFER SURCHARGE', 70, 1, FORMULA_COST, '', ''],\n    ['EXPORT DOCUMENT FEE', 65, 1, FORMULA_COST, '', ''],\n    ['EXPORT HANDLING FEE', 50, 1, FORMULA_COST, '', ''],\n    ['', '', 'TOTAL ESTIMATED', FORMULA_TOTAL, '', ''],\n    ['* ABOVE RATE IS OUR NET SELLING RATE', '', '', '', '', ''],\n    ['* INSURANCE CHARGE: CHICAGO CFS TO DESTINATION DOOR *if needed MIN $55.00 / $0.36/$100 by 110% of Invoice Value.', '', '', '', '', ''],\n    []\n  ];\n\n  result.push({\n    json: { messageId: emailData.messageId, quoteNumber, rows }\n  });\n}\n\nreturn result;"
+        "jsCode": "function col(row, name) {\n  const t = name.trim().toUpperCase();\n  for (const [k, v] of Object.entries(row)) {\n    if (k.trim().toUpperCase() === t) return v == null ? '' : String(v);\n  }\n  return '';\n}\n\nconst logRows    = $('Read Quote Log').all().map(i => i.json);\nconst markupRows = $('Read Markup Config').all().map(i => i.json);\nconst emailItems = $('Build Gemini Rate Payload').all();\nconst geminiItems = $input.all();\n\n// Markup config: rows with columns WEIGHT BREAK | MARKUP\nconst minChargeRow = markupRows.find(r => col(r,'WEIGHT BREAK').toUpperCase() === 'MIN CHARGE');\nconst minCharge = minChargeRow ? (parseFloat(col(minChargeRow,'MARKUP')) || 175) : 175;\n\nconst breaks = markupRows\n  .filter(r => !isNaN(parseFloat(col(r,'WEIGHT BREAK'))))\n  .map(r => ({ wt: parseFloat(col(r,'WEIGHT BREAK')), markup: parseFloat(col(r,'MARKUP')) }))\n  .sort((a,b) => a.wt - b.wt);\n\nfunction getMarkupRate(cw) {\n  const billable = Math.max(45, cw);\n  let rate = breaks.length > 0 ? breaks[0].markup : 2.15;\n  for (const b of breaks) {\n    if (billable >= b.wt) rate = b.markup;\n  }\n  return (rate * billable) < minCharge ? minCharge / billable : rate;\n}\n\n// These formulas use ROW() so they work at any position in the sheet\nconst FORMULA_COST  = '=INDIRECT(\"B\"&ROW())*INDIRECT(\"C\"&ROW())';\nconst FORMULA_TOTAL = '=SUM(INDIRECT(\"D\"&(ROW()-8)&\":D\"&(ROW()-1)))';\n\nconst result = [];\n\nfor (let i = 0; i < geminiItems.length; i++) {\n  const gemini    = geminiItems[i].json;\n  const emailData = emailItems[i] ? emailItems[i].json : {};\n\n  const rawText = gemini?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  let rates = { airFreightRatePerKg:0, isAllIn:false, fuelSurchargePerKg:0, securitySurchargePerKg:0, screeningFeePerKg:0, transitTime:'' };\n  try {\n    const cleaned = rawText.replace(/^```json\\s*/i,'').replace(/```\\s*$/i,'').trim();\n    rates = { ...rates, ...JSON.parse(cleaned) };\n  } catch(e) {}\n\n  const quoteNumber = emailData.quoteNumber || '';\n  const logRow = logRows.find(r => col(r,'QUOTE NUMBER').trim() === quoteNumber.trim());\n\n  const pod         = logRow ? col(logRow,'DEST')  : '';\n  const cw          = logRow ? (parseFloat(col(logRow,'CW (KGS)')) || 0) : 0;\n  const airlineCode = logRow ? col(logRow,'AIRLINE').split(',')[0].trim() : '';\n\n  const billableCW = Math.max(45, cw);\n  const markupRate = getMarkupRate(cw);\n  const sellingAirFreight = Math.round(((parseFloat(rates.airFreightRatePerKg) || 0) + markupRate) * 100) / 100;\n\n  const fuelRate   = rates.isAllIn ? 0 : (parseFloat(rates.fuelSurchargePerKg)     || 0);\n  const secRate    = rates.isAllIn ? 0 : (parseFloat(rates.securitySurchargePerKg) || 0);\n  const screenRate = parseFloat(rates.screeningFeePerKg) || 0;\n  const transitTime = rates.transitTime || '';\n\n  const pol   = 'ORD';\n  const route = pod ? `ORD - ${pod}` : 'ORD -';\n\n  // 4 columns only (A-D). Header block and footer each in ONE multiline cell\n  // so copy-paste to email produces a clean 4-column table.\n  const headerBlock = [\n    'ESTIMATED COSTS (AIR GENERAL CARGO 1M1H Service)',\n    `POL : ${pol}`,\n    `POD : ${pod}`,\n    `AIR CARRIER : ${airlineCode}`,\n    `ROUTE : ${route}`,\n    `TRANSIT TIME : ${transitTime} DAYS`\n  ].join('\\n');\n\n  const footerBlock = [\n    '* ABOVE RATE IS OUR NET SELLING RATE',\n    '* INSURANCE CHARGE: CHICAGO CFS TO DESTINATION DOOR *if needed MIN $55.00 / $0.36/$100 by 110% of Invoice Value.'\n  ].join('\\n');\n\n  // Each inner array maps to columns A, B, C, D\n  const rows = [\n    [quoteNumber, 'PENDING', '', ''],\n    [],\n    ['C.W.', billableCW ? `${billableCW} KGS` : '', '', ''],\n    [],\n    [headerBlock, '', '', ''],\n    [],\n    ['SUBJECT', 'RATE', 'UNIT', 'COST'],\n    ['INLAND PICKUP CHARGE', '', '', FORMULA_COST],\n    ['AIR FREIGHT CHARGE', sellingAirFreight, billableCW, FORMULA_COST],\n    ['FUEL SURCHARGE', fuelRate, fuelRate > 0 ? billableCW : 0, FORMULA_COST],\n    ['SECURITY SURCHARGE', secRate, secRate > 0 ? billableCW : 0, FORMULA_COST],\n    ['SCREENING SURCHARGE', screenRate, screenRate > 0 ? billableCW : 0, FORMULA_COST],\n    ['AIRPORT TRANSFER SURCHARGE', 70, 1, FORMULA_COST],\n    ['EXPORT DOCUMENT FEE', 65, 1, FORMULA_COST],\n    ['EXPORT HANDLING FEE', 50, 1, FORMULA_COST],\n    ['', '', 'TOTAL ESTIMATED', FORMULA_TOTAL],\n    [footerBlock, '', '', ''],\n    []\n  ];\n\n  result.push({\n    json: { messageId: emailData.messageId, quoteNumber, rows }\n  });\n}\n\nreturn result;"
       },
       "id": "node-compute-quot",
       "name": "Compute Quotation Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 500]
+      "position": [
+        1250,
+        500
+      ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Splits each quotation's rows array into one item per row.\n// Columns A-F map to the QUOTATION sheet which must have\n// a header row 1 containing: A | B | C | D | E | F\nconst result = [];\nfor (const item of $input.all()) {\n  const rows = item.json.rows || [];\n  for (const row of rows) {\n    const [a='', b='', c='', d='', e='', f=''] = row;\n    result.push({ json: { A: a, B: b, C: c, D: d, E: e, F: f } });\n  }\n}\nreturn result;"
+        "jsCode": "// Splits each quotation's rows array into one item per row.\n// Columns A-D map to the QUOTATION sheet which must have\n// a header row 1 containing: A | B | C | D\nconst result = [];\nfor (const item of $input.all()) {\n  const rows = item.json.rows || [];\n  for (const row of rows) {\n    const [a='', b='', c='', d=''] = row;\n    result.push({ json: { A: a, B: b, C: c, D: d } });\n  }\n}\nreturn result;"
       },
       "id": "node-split-quot-rows",
       "name": "Split Quotation Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1500, 650]
+      "position": [
+        1500,
+        650
+      ]
     },
     {
       "parameters": {
@@ -182,18 +209,46 @@
             "A": "={{$json.A}}",
             "B": "={{$json.B}}",
             "C": "={{$json.C}}",
-            "D": "={{$json.D}}",
-            "E": "={{$json.E}}",
-            "F": "={{$json.F}}"
+            "D": "={{$json.D}}"
           },
           "matchingColumns": [],
           "schema": [
-            { "id": "A", "displayName": "A", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "B", "displayName": "B", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "C", "displayName": "C", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "D", "displayName": "D", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "E", "displayName": "E", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "F", "displayName": "F", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+            {
+              "id": "A",
+              "displayName": "A",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "B",
+              "displayName": "B",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "C",
+              "displayName": "C",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "D",
+              "displayName": "D",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
           ]
         },
         "options": {}
@@ -202,7 +257,10 @@
       "name": "Append Row to QUOTATION",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [1750, 650],
+      "position": [
+        1750,
+        650
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GSHEETS_CREDENTIAL_ID",
@@ -216,14 +274,19 @@
         "operation": "update",
         "messageId": "={{$json.messageId}}",
         "updateFields": {
-          "categories": ["QUOTATION - PROCESSED"]
+          "categories": [
+            "QUOTATION - PROCESSED"
+          ]
         }
       },
       "id": "node-mark-quot-processed",
       "name": "Mark Email Processed",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [1500, 350],
+      "position": [
+        1500,
+        350
+      ],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
@@ -236,43 +299,93 @@
     "Poll Quotation Trigger": {
       "main": [
         [
-          { "node": "Read Quote Log",    "type": "main", "index": 0 },
-          { "node": "Read Markup Config", "type": "main", "index": 0 },
-          { "node": "Get Rate Emails",   "type": "main", "index": 0 }
+          {
+            "node": "Read Quote Log",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Markup Config",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Rate Emails",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Get Rate Emails": {
       "main": [
-        [{ "node": "Filter Unprocessed Rate Emails", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Filter Unprocessed Rate Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Filter Unprocessed Rate Emails": {
       "main": [
-        [{ "node": "Build Gemini Rate Payload", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Build Gemini Rate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build Gemini Rate Payload": {
       "main": [
-        [{ "node": "Gemini - Extract Rates", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Gemini - Extract Rates",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Gemini - Extract Rates": {
       "main": [
-        [{ "node": "Compute Quotation Data", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Compute Quotation Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Compute Quotation Data": {
       "main": [
         [
-          { "node": "Mark Email Processed",  "type": "main", "index": 0 },
-          { "node": "Split Quotation Rows",  "type": "main", "index": 0 }
+          {
+            "node": "Mark Email Processed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Quotation Rows",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Split Quotation Rows": {
       "main": [
-        [{ "node": "Append Row to QUOTATION", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Append Row to QUOTATION",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
