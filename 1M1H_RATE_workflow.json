@@ -97,7 +97,7 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": "Sheet1",
+          "value": "Quote Log",
           "mode": "name"
         },
         "options": {}
@@ -184,7 +184,7 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": "Sheet1",
+          "value": "Quote Log",
           "mode": "name"
         },
         "columns": {
