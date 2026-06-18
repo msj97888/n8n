@@ -146,7 +146,7 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": "Sheet1",
+          "value": "AIRLINE CONTACTS",
           "mode": "name"
         },
         "options": {}
@@ -166,7 +166,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const current = $input.item.json;\n\nconst contactEmail = current.contactEmail || '';\n\nlet remarkText;\nif (current.fallbackReason) {\n  remarkText = current.fallbackReason;\n} else if (!contactEmail) {\n  remarkText = `No contact email on file for airline code \"${current.airlineCode}\"`;\n} else {\n  remarkText = '';\n}\n\nconst isDG = /\\bDG\\b|dangerous/i.test(current.cargoType || '');\nconst cargoTag = isDG ? 'DG' : 'GENERAL CARGO';\nconst airlineTag = current.airlineCode || 'UNASSIGNED';\n\nconst subject = `[${airlineTag}] ${current.pol}-${current.pod || '?'} / RATE QUOTE / ${cargoTag} / ${current.quoteNumber}`;\n\nconst body = [\n  'Hello team,',\n  '',\n  'Please check the below shipment and provide us with rate and flight frequency.',\n  '',\n  `* POL : ${current.pol}`,\n  `* POD : ${current.pod}`,\n  '* UNKNOWN SHIPPER',\n  `* ${current.cargoType}`,\n  `* TOTAL ${current.pieces}`,\n  `* ${current.dimensions}`,\n  `* TOTAL G.W ${current.grossWeightKg} KGS`,\n  `* TOTAL C.W ${current.chargeableWeightKg} KGS`,\n  '',\n  'Thank you.',\n].join('\\n');\n\nreturn {\n  json: {\n    // Fields for Outlook draft\n    _messageId: current.messageId,\n    to: contactEmail,\n    subject,\n    body,\n    // Fields for Google Sheets log (column names match sheet headers exactly)\n    DATE: $now.toFormat('yyyy-LL-dd'),\n    'EMAIL SUBJECT': current.originalSubject || '',\n    'QUOTE NUMBER': current.quoteNumber || '',\n    'AGENT/CUSTOMER': '',\n    AIRLINE: current.airlineCode !== 'UNASSIGNED' ? current.airlineCode : '',\n    DEST: current.pod || '',\n    'CW (KGS)': current.chargeableWeightKg != null ? String(current.chargeableWeightKg) : '',\n    'SENT BY': '',\n    STATUS: 'DRAFT',\n    REMARK: remarkText,\n  },\n};"
+        "jsCode": "const current = $input.item.json;\n\nconst contactEmail = current.contactEmail || '';\n\nlet remarkText;\nif (current.fallbackReason) {\n  remarkText = current.fallbackReason;\n} else if (!contactEmail) {\n  remarkText = `No contact email on file for airline code \"${current.airlineCode}\"`;\n} else {\n  remarkText = '';\n}\n\nconst isDG = /\\bDG\\b|dangerous/i.test(current.cargoType || '');\nconst cargoTag = isDG ? 'DG' : 'GENERAL CARGO';\nconst airlineTag = current.airlineCode || 'UNASSIGNED';\n\nconst subject = `[${airlineTag}] ${current.pol}-${current.pod || '?'} / RATE QUOTE / ${cargoTag} / ${current.quoteNumber}`;\n\nconst body = [\n  'Hello team,',\n  '',\n  'Please check the below shipment and provide us with rate and flight frequency.',\n  '',\n  `* POL : ${current.pol}`,\n  `* POD : ${current.pod}`,\n  '* UNKNOWN SHIPPER',\n  `* ${current.cargoType}`,\n  `* TOTAL ${current.pieces}`,\n  `* ${current.dimensions}`,\n  `* TOTAL G.W ${current.grossWeightKg} KGS`,\n  `* TOTAL C.W ${current.chargeableWeightKg} KGS`,\n  '',\n  'Thank you.',\n].join('\\n');\n\nreturn {\n  json: {\n    // Nested so autoMapInputData ignores these when writing to Google Sheets\n    _draft: {\n      messageId: current.messageId,\n      to: contactEmail,\n      subject,\n      body,\n    },\n    // Flat sheet column keys — exactly matching quote log headers\n    DATE: $now.toFormat('yyyy-LL-dd'),\n    'EMAIL SUBJECT': current.originalSubject || '',\n    'QUOTE NUMBER': current.quoteNumber || '',\n    'AGENT/CUSTOMER': '',\n    AIRLINE: current.airlineCode !== 'UNASSIGNED' ? current.airlineCode : '',\n    DEST: current.pod || '',\n    'CW (KGS)': current.chargeableWeightKg != null ? String(current.chargeableWeightKg) : '',\n    'SENT BY': '',\n    STATUS: 'DRAFT',\n    REMARK: remarkText,\n  },\n};"
       },
       "id": "node-build-draft-fields",
       "name": "Build Draft Fields",
@@ -209,10 +209,10 @@
       "parameters": {
         "resource": "draft",
         "operation": "create",
-        "subject": "={{$json.subject}}",
-        "bodyContent": "={{$json.body}}",
+        "subject": "={{$json._draft.subject}}",
+        "bodyContent": "={{$json._draft.body}}",
         "bodyContentType": "Text",
-        "toRecipients": "={{$json.to}}",
+        "toRecipients": "={{$json._draft.to}}",
         "additionalFields": {}
       },
       "id": "node-create-draft",
@@ -231,7 +231,7 @@
       "parameters": {
         "resource": "message",
         "operation": "update",
-        "messageId": "={{$('Build Draft Fields').item.json._messageId}}",
+        "messageId": "={{$('Build Draft Fields').item.json._draft.messageId}}",
         "updateFields": {
           "categories": ["1M1H RATE - PROCESSED"]
         }
