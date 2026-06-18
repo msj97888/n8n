@@ -79,7 +79,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const geminiResponse = $input.item.json;\nconst rawText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;\n\nlet parsed = {};\nlet needsManualReview = false;\n\nif (!rawText) {\n  needsManualReview = true;\n} else {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e) {\n    needsManualReview = true;\n  }\n}\n\n// Extract just the IATA code (3 uppercase letters) from POD/POL\nfunction iata(s) {\n  const m = (s || '').match(/\\b([A-Z]{3})\\b/);\n  return m ? m[1] : (s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);\n}\n\nconst pod = iata(parsed.pod || '');\nconst pol = iata(parsed.pol || '');\n\nif (!pod) needsManualReview = true;\n\n// Use || null so Gemini returning 0 is treated as \"not stated\"\nlet chargeableWeightKg = parsed.chargeableWeightKg || null;\nif (chargeableWeightKg === null) {\n  const L = parsed.dimL, W = parsed.dimW, H = parsed.dimH;\n  const unit = (parsed.dimUnit || '').toLowerCase().trim();\n  const pieces = parsed.piecesCount || 1;\n  const gw = parsed.grossWeightKg || 0;\n\n  if (L && W && H) {\n    const toIn = unit === 'cm' ? (v) => v / 2.54 : (v) => v;\n    const vw = (toIn(L) * toIn(W) * toIn(H) * pieces) / 166 / 2.2046;\n    chargeableWeightKg = Math.round(Math.max(vw, gw) * 100) / 100;\n  } else {\n    chargeableWeightKg = gw || '';\n  }\n}\n\nconst sourceEmail = $('Build Gemini Payload').item.json;\n\nreturn {\n  json: {\n    messageId: sourceEmail.emailId,\n    originalSubject: sourceEmail.emailSubject,\n    pol,\n    pod,\n    shipper: parsed.shipper || 'UNKNOWN',\n    cargoType: parsed.cargoType || '',\n    pieces: parsed.pieces || '',\n    dimensions: parsed.dimensions || '',\n    grossWeightKg: parsed.grossWeightKg ?? '',\n    chargeableWeightKg,\n    needsManualReview,\n  },\n};"
+        "jsCode": "const geminiResponse = $input.item.json;\nconst rawText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;\n\nlet parsed = {};\nlet needsManualReview = false;\n\nif (!rawText) {\n  needsManualReview = true;\n} else {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e) {\n    needsManualReview = true;\n  }\n}\n\n// Extract just the IATA code (3 uppercase letters) from POD/POL\nfunction iata(s) {\n  const m = (s || '').match(/\\b([A-Z]{3})\\b/);\n  return m ? m[1] : (s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);\n}\n\nconst pod = iata(parsed.pod || '');\nconst pol = iata(parsed.pol || '');\n\nif (!pod) needsManualReview = true;\n\n// Use || null so Gemini returning 0 is treated as \"not stated\"\nlet chargeableWeightKg = parsed.chargeableWeightKg || null;\nif (chargeableWeightKg === null) {\n  const L = parsed.dimL, W = parsed.dimW, H = parsed.dimH;\n  const unit = (parsed.dimUnit || '').toLowerCase().trim();\n  const pieces = parsed.piecesCount || 1;\n  const gw = parsed.grossWeightKg || 0;\n\n  if (L && W && H) {\n    const toIn = unit === 'cm' ? (v) => v / 2.54 : (v) => v;\n    const vw = (toIn(L) * toIn(W) * toIn(H) * pieces) / 166 / 2.2046;\n    chargeableWeightKg = Math.round(Math.max(vw, gw));\n  } else {\n    chargeableWeightKg = gw ? Math.round(gw) : '';\n  }\n}\n\nconst sourceEmail = $('Build Gemini Payload').item.json;\n\nreturn {\n  json: {\n    messageId: sourceEmail.emailId,\n    originalSubject: sourceEmail.emailSubject,\n    pol,\n    pod,\n    shipper: parsed.shipper || 'UNKNOWN',\n    cargoType: parsed.cargoType || '',\n    pieces: parsed.pieces || '',\n    dimensions: parsed.dimensions || '',\n    grossWeightKg: parsed.grossWeightKg ?? '',\n    chargeableWeightKg,\n    needsManualReview,\n  },\n};"
       },
       "id": "node-parse-extraction",
       "name": "Parse Extraction",
@@ -166,7 +166,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const current = $input.item.json;\n\nconst contactEmail = current.contactEmail || '';\n\nlet remarkText;\nif (current.fallbackReason) {\n  remarkText = current.fallbackReason;\n} else if (!contactEmail) {\n  remarkText = `No contact email on file for airline code \"${current.airlineCode}\"`;\n} else {\n  remarkText = '';\n}\n\nconst isDG = /\\bDG\\b|dangerous/i.test(current.cargoType || '');\nconst cargoTag = isDG ? 'DG' : 'GENERAL CARGO';\nconst airlineTag = current.airlineCode || 'UNASSIGNED';\n\nconst subject = `[${airlineTag}] ${current.pol}-${current.pod || '?'} / RATE QUOTE / ${cargoTag} / ${current.quoteNumber}`;\n\nconst body = [\n  'Hello team,',\n  '',\n  'Please check the below shipment and provide us with rate and flight frequency.',\n  '',\n  `* POL : ${current.pol}`,\n  `* POD : ${current.pod}`,\n  '* UNKNOWN SHIPPER',\n  `* ${current.cargoType}`,\n  `* TOTAL ${current.pieces}`,\n  `* ${current.dimensions}`,\n  `* TOTAL G.W ${current.grossWeightKg} KGS`,\n  `* TOTAL C.W ${current.chargeableWeightKg} KGS`,\n  '',\n  'Thank you.',\n].join('\\n');\n\nreturn {\n  json: {\n    // Nested so autoMapInputData ignores these when writing to Google Sheets\n    _draft: {\n      messageId: current.messageId,\n      to: contactEmail,\n      subject,\n      body,\n    },\n    // Flat sheet column keys — exactly matching quote log headers\n    DATE: $now.toFormat('yyyy-LL-dd'),\n    'EMAIL SUBJECT': current.originalSubject || '',\n    'QUOTE NUMBER': current.quoteNumber || '',\n    'AGENT/CUSTOMER': '',\n    AIRLINE: current.airlineCode !== 'UNASSIGNED' ? current.airlineCode : '',\n    DEST: current.pod || '',\n    'CW (KGS)': current.chargeableWeightKg != null ? String(current.chargeableWeightKg) : '',\n    'SENT BY': '',\n    STATUS: 'DRAFT',\n    REMARK: remarkText,\n  },\n};"
+        "jsCode": "const current = $input.item.json;\n\nconst contactEmail = current.contactEmail || '';\n\nlet remarkText;\nif (current.fallbackReason) {\n  remarkText = current.fallbackReason;\n} else if (!contactEmail) {\n  remarkText = `No contact email on file for airline code \"${current.airlineCode}\"`;\n} else {\n  remarkText = '';\n}\n\nconst isDG = /\\bDG\\b|dangerous/i.test(current.cargoType || '');\nconst cargoTag = isDG ? 'DG' : 'GENERAL CARGO';\nconst airlineTag = current.airlineCode || 'UNASSIGNED';\n\nconst subject = `[${airlineTag}] ${current.pol}-${current.pod || '?'} / RATE QUOTE / ${cargoTag} / ${current.quoteNumber}`;\n\nconst body = [\n  'Hello team,',\n  '',\n  'Please check the below shipment and provide us with rate and flight frequency.',\n  '',\n  `* POL : ${current.pol}`,\n  `* POD : ${current.pod}`,\n  '* UNKNOWN SHIPPER',\n  `* ${current.cargoType}`,\n  `* TOTAL ${current.pieces}`,\n  `* ${current.dimensions}`,\n  `* TOTAL G.W ${current.grossWeightKg} KGS`,\n  `* TOTAL C.W ${current.chargeableWeightKg} KGS`,\n  '',\n  'Thank you.',\n].join('\\n');\n\nreturn {\n  json: {\n    _draft: {\n      messageId: current.messageId,\n      to: contactEmail,\n      subject,\n      body,\n    },\n  },\n};"
       },
       "id": "node-build-draft-fields",
       "name": "Build Draft Fields",
@@ -190,16 +190,16 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "DATE": "={{$json['DATE']}}",
-            "EMAIL SUBJECT": "={{$json['EMAIL SUBJECT']}}",
-            "QUOTE NUMBER": "={{$json['QUOTE NUMBER']}}",
-            "AGENT/CUSTOMER": "={{$json['AGENT/CUSTOMER']}}",
-            "AIRLINE": "={{$json['AIRLINE']}}",
-            "DEST": "={{$json['DEST']}}",
-            "CW (KGS)": "={{$json['CW (KGS)']}}",
-            "SENT BY": "={{$json['SENT BY']}}",
-            "STATUS": "={{$json['STATUS']}}",
-            "REMARK": "={{$json['REMARK']}}"
+            "DATE": "={{$now.toFormat('yyyy-LL-dd')}}",
+            "EMAIL SUBJECT": "={{$json.originalSubject}}",
+            "QUOTE NUMBER": "={{$json.quoteNumber}}",
+            "AGENT/CUSTOMER": "",
+            "AIRLINE": "={{$json.airlineCodes.filter(a => a !== 'UNASSIGNED').join(', ')}}",
+            "DEST": "={{$json.pod}}",
+            "CW (KGS)": "={{$json.chargeableWeightKg != null ? String($json.chargeableWeightKg) : ''}}",
+            "SENT BY": "",
+            "STATUS": "DRAFT",
+            "REMARK": "={{$json.fallbackReason || ''}}"
           },
           "matchingColumns": [],
           "schema": [
@@ -221,7 +221,7 @@
       "name": "Log Quote Row",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [2300, 200],
+      "position": [1800, 200],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GSHEETS_CREDENTIAL_ID",
@@ -343,6 +343,11 @@
       "main": [
         [
           {
+            "node": "Log Quote Row",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Split Out Airlines",
             "type": "main",
             "index": 0
@@ -364,11 +369,6 @@
     "Build Draft Fields": {
       "main": [
         [
-          {
-            "node": "Log Quote Row",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Create Draft",
             "type": "main",
