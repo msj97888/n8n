@@ -190,7 +190,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "DATE": "={{$now.toFormat('yyyy-LL-dd')}}",
+            "DATE": "={{$json['DATE']}}",
             "EMAIL SUBJECT": "={{$json['EMAIL SUBJECT']}}",
             "QUOTE NUMBER": "={{$json['QUOTE NUMBER']}}",
             "AGENT/CUSTOMER": "={{$json['AGENT/CUSTOMER']}}",
