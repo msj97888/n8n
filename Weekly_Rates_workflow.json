@@ -1,7 +1,261 @@
 {
   "name": "Weekly Rates Workflow",
-  "nodes": [],
-  "connections": {},
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "node-biweekly-trigger",
+      "name": "Bi-Weekly Send Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "AIRLINE CONTACTS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "node-read-contacts-wr",
+      "name": "Read Airline Contacts",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [250, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function col(r, name) {\n  const t = name.trim().toUpperCase();\n  for (const [k, v] of Object.entries(r)) {\n    if (k.trim().toUpperCase() === t) return v == null ? '' : String(v);\n  }\n  return '';\n}\n\nconst today = $now.toFormat('yyyy-LL-dd');\nconst result = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  const airlineCode = col(row, 'AIRLINE CODE');\n  const emailAddress = col(row, 'EMAIL ADDRESS');\n  if (!emailAddress) continue;\n\n  const subject = `Bi-Weekly Rate Request - ${airlineCode} - ${today}`;\n  const body = [\n    'Dear Team,',\n    '',\n    'Hope this message finds you well.',\n    '',\n    'We would like to kindly request your updated air freight rates for the upcoming weeks.',\n    '',\n    'Please provide:',\n    '- Destination / Weight Break Rates (per KG)',\n    '- All applicable surcharges (Fuel, Security, Screening, etc.)',\n    '- Route and Transit Time Information',\n    '',\n    'An email reply or PDF attachment would be appreciated.',\n    '',\n    'Thank you for your continued partnership.',\n    '',\n    'Best regards,',\n    '1M1H Logistics'\n  ].join('\\n');\n\n  result.push({ json: { airlineCode, emailAddress, subject, body } });\n}\nreturn result;"
+      },
+      "id": "node-build-rate-request",
+      "name": "Build Rate Request Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "operation": "create",
+        "subject": "={{$json.subject}}",
+        "bodyContent": "={{$json.body}}",
+        "bodyContentType": "Text",
+        "toRecipients": "={{$json.emailAddress}}",
+        "additionalFields": {}
+      },
+      "id": "node-create-draft-wr",
+      "name": "Create Rate Request Draft",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [750, 300],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OUTLOOK_CREDENTIAL_ID",
+          "name": "Microsoft Outlook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "operation": "send",
+        "messageId": "={{$json.id}}"
+      },
+      "id": "node-send-draft-wr",
+      "name": "Send Rate Request",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OUTLOOK_CREDENTIAL_ID",
+          "name": "Microsoft Outlook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "node-poll-trigger",
+      "name": "Poll Rate Replies Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 600]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": true,
+        "mailboxId": "WEEKLY_RATES_FOLDER_ID",
+        "filters": {},
+        "options": {
+          "fields": "subject,bodyPreview,from,receivedDateTime,id,categories,hasAttachments"
+        }
+      },
+      "id": "node-get-replies",
+      "name": "Get Rate Reply Emails",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OUTLOOK_CREDENTIAL_ID",
+          "name": "Microsoft Outlook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const result = [];\nfor (const item of $input.all()) {\n  const email = item.json;\n  const cats = Array.isArray(email.categories) ? email.categories : [];\n  if (cats.includes('WEEKLY RATES - PROCESSED')) continue;\n\n  const from = (email.from && email.from.emailAddress)\n    ? email.from.emailAddress.address\n    : (email.from || '');\n  const receivedDate = email.receivedDateTime\n    ? new Date(email.receivedDateTime).toISOString().slice(0, 10)\n    : $now.toFormat('yyyy-LL-dd');\n\n  result.push({\n    json: {\n      messageId: email.id,\n      from,\n      subject: email.subject || '',\n      bodyPreview: (email.bodyPreview || '').slice(0, 1000),\n      receivedDate,\n      hasAttachments: email.hasAttachments || false\n    }\n  });\n}\nreturn result;"
+      },
+      "id": "node-filter-replies",
+      "name": "Filter Unprocessed Replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 600]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Weekly Rates Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "DATE": "={{$json.receivedDate}}",
+            "FROM": "={{$json.from}}",
+            "SUBJECT": "={{$json.subject}}",
+            "RATE INFO": "={{$json.bodyPreview}}",
+            "STATUS": "RECEIVED"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "DATE", "displayName": "DATE", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "FROM", "displayName": "FROM", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "SUBJECT", "displayName": "SUBJECT", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "RATE INFO", "displayName": "RATE INFO", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "STATUS", "displayName": "STATUS", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-log-reply",
+      "name": "Log Rate Reply",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [750, 600],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "update",
+        "messageId": "={{$('Filter Unprocessed Replies').item.json.messageId}}",
+        "updateFields": {
+          "categories": ["WEEKLY RATES - PROCESSED"]
+        }
+      },
+      "id": "node-mark-processed",
+      "name": "Mark Reply Processed",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [1000, 600],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "OUTLOOK_CREDENTIAL_ID",
+          "name": "Microsoft Outlook account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Bi-Weekly Send Trigger": {
+      "main": [
+        [{ "node": "Read Airline Contacts", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Airline Contacts": {
+      "main": [
+        [{ "node": "Build Rate Request Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Rate Request Email": {
+      "main": [
+        [{ "node": "Create Rate Request Draft", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Rate Request Draft": {
+      "main": [
+        [{ "node": "Send Rate Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Poll Rate Replies Trigger": {
+      "main": [
+        [{ "node": "Get Rate Reply Emails", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Rate Reply Emails": {
+      "main": [
+        [{ "node": "Filter Unprocessed Replies", "type": "main", "index": 0 }]
+      ]
+    },
+    "Filter Unprocessed Replies": {
+      "main": [
+        [{ "node": "Log Rate Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log Rate Reply": {
+      "main": [
+        [{ "node": "Mark Reply Processed", "type": "main", "index": 0 }]
+      ]
+    }
+  },
   "settings": {
     "executionOrder": "v1"
   },
