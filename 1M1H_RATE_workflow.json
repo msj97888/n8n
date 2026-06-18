@@ -193,10 +193,10 @@
             "DATE": "={{$now.toFormat('yyyy-LL-dd')}}",
             "EMAIL SUBJECT": "={{$json.originalSubject}}",
             "QUOTE NUMBER": "={{$json.quoteNumber}}",
-            "AGENT/CUSTOMER": "",
-            "AIRLINE": "={{$json.airlineCodes.filter(a => a !== 'UNASSIGNED').join(', ')}}",
+            "AGENT/CUSTOMER": "={{$json.shipper}}",
+            "AIRLINE": "={{$json.airlineCodes.filter(Boolean).join(', ')}}",
             "DEST": "={{$json.pod}}",
-            "CW (KGS)": "={{$json.chargeableWeightKg != null ? String($json.chargeableWeightKg) : ''}}",
+            "CW (KGS)": "={{$json.chargeableWeightKg}}",
             "SENT BY": "",
             "STATUS": "DRAFT",
             "REMARK": "={{$json.fallbackReason || ''}}"
