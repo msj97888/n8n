@@ -188,8 +188,32 @@
           "mode": "name"
         },
         "columns": {
-          "mappingMode": "autoMapInputData",
-          "value": {}
+          "mappingMode": "defineBelow",
+          "value": {
+            "DATE": "={{$now.toFormat('yyyy-LL-dd')}}",
+            "EMAIL SUBJECT": "={{$json['EMAIL SUBJECT']}}",
+            "QUOTE NUMBER": "={{$json['QUOTE NUMBER']}}",
+            "AGENT/CUSTOMER": "={{$json['AGENT/CUSTOMER']}}",
+            "AIRLINE": "={{$json['AIRLINE']}}",
+            "DEST": "={{$json['DEST']}}",
+            "CW (KGS)": "={{$json['CW (KGS)']}}",
+            "SENT BY": "={{$json['SENT BY']}}",
+            "STATUS": "={{$json['STATUS']}}",
+            "REMARK": "={{$json['REMARK']}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "DATE", "displayName": "DATE", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "EMAIL SUBJECT", "displayName": "EMAIL SUBJECT", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "QUOTE NUMBER", "displayName": "QUOTE NUMBER", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "AGENT/CUSTOMER", "displayName": "AGENT/CUSTOMER", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "AIRLINE", "displayName": "AIRLINE", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "DEST", "displayName": "DEST", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "CW (KGS)", "displayName": "CW (KGS)", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "SENT BY", "displayName": "SENT BY", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "STATUS", "displayName": "STATUS", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "REMARK", "displayName": "REMARK", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
         },
         "options": {}
       },
