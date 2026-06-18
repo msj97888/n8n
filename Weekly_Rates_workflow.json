@@ -1,0 +1,14 @@
+{
+  "name": "Weekly Rates Workflow",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "n8nVersion": "1.0.0"
+  }
+}
