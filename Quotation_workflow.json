@@ -211,7 +211,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "function col(row, name) {\n  const t = name.trim().toUpperCase();\n  for (const [k, v] of Object.entries(row)) {\n    if (k.trim().toUpperCase() === t) return v == null ? '' : String(v).trim();\n  }\n  return '';\n}\n\nconst metadata = $('Get Sheet Metadata').first().json;\nconst sheets = metadata.sheets || [];\nlet templateSheetId = null, quotationSheetId = null;\nfor (const s of sheets) {\n  const title = (s.properties && s.properties.title) || '';\n  if (title === 'TEMPLATE') templateSheetId = s.properties.sheetId;\n  if (title === 'QUOTATION') quotationSheetId = s.properties.sheetId;\n}\n\nconst rowData = $('Get Quotation Rows').first().json;\nconst existingRows = (rowData.values || []).length;\nlet startRow = existingRows > 0 ? existingRows + 2 : 1;\n\nconst markupRows = $('Read Markup Config').all().map(i => i.json);\nconst minChargeRow = markupRows.find(r => col(r,'WEIGHT BREAK').toUpperCase() === 'MIN CHARGE');\nconst minCharge = minChargeRow ? (parseFloat(col(minChargeRow,'MARKUP')) || 175) : 175;\nconst breaks = markupRows\n  .filter(r => !isNaN(parseFloat(col(r,'WEIGHT BREAK'))))\n  .map(r => ({ wt: parseFloat(col(r,'WEIGHT BREAK')), markup: parseFloat(col(r,'MARKUP')) }))\n  .sort((a,b) => a.wt - b.wt);\n\nfunction getMarkupRate(cw) {\n  const billable = Math.max(45, cw);\n  let rate = breaks.length > 0 ? breaks[0].markup : 2.15;\n  for (const b of breaks) { if (billable >= b.wt) rate = b.markup; }\n  return (rate * billable) < minCharge ? minCharge / billable : rate;\n}\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\nconst emailItems = $('Build Gemini Rate Payload').all();\nconst geminiItems = $input.all();\nconst result = [];\n\nfor (let i = 0; i < geminiItems.length; i++) {\n  const gemini = geminiItems[i].json;\n  const emailData = emailItems[i] ? emailItems[i].json : {};\n\n  const rawText = gemini?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  let rates = { airFreightRatePerKg:0, isAllIn:false, fuelSurchargePerKg:0, securitySurchargePerKg:0, screeningFeePerKg:0, transitTime:'' };\n  try {\n    const cleaned = rawText.replace(/^```json\\s*/i,'').replace(/```\\s*$/i,'').trim();\n    rates = { ...rates, ...JSON.parse(cleaned) };\n  } catch(e) {}\n\n  const quoteNumber = emailData.quoteNumber || '';\n  const messageId = emailData.messageId || '';\n  const logRow = logRows.find(r => col(r,'QUOTE NUMBER').trim() === quoteNumber.trim()) || {};\n\n  const cw = parseFloat(col(logRow,'CW (KGS)')) || 0;\n  const billableCW = Math.max(45, cw);\n  const netRate = parseFloat(rates.airFreightRatePerKg) || 0;\n  const markupRate = getMarkupRate(cw);\n  const sellingAirFreight = Math.round((netRate + markupRate) * 100) / 100;\n\n  const fuelRate   = rates.isAllIn ? 0 : (parseFloat(rates.fuelSurchargePerKg)    || 0);\n  const secRate    = rates.isAllIn ? 0 : (parseFloat(rates.securitySurchargePerKg) || 0);\n  const screenRate = parseFloat(rates.screeningFeePerKg) || 0;\n\n  result.push({ json: {\n    startRow, templateSheetId, quotationSheetId, messageId,\n    sellingAirFreight, billableCW,\n    fuelRate,   fuelUnit:   fuelRate   > 0 ? billableCW : 0,\n    secRate,    secUnit:    secRate    > 0 ? billableCW : 0,\n    screenRate, screenUnit: screenRate > 0 ? billableCW : 0\n  }});\n\n  startRow += 30;\n}\n\nreturn result;"
+        "jsCode": "function col(row, name) {\n  const t = name.trim().toUpperCase();\n  for (const [k, v] of Object.entries(row)) {\n    if (k.trim().toUpperCase() === t) return v == null ? '' : String(v).trim();\n  }\n  return '';\n}\n\nconst metadata = $('Get Sheet Metadata').first().json;\nconst sheets = metadata.sheets || [];\nlet templateSheetId = null, quotationSheetId = null;\nfor (const s of sheets) {\n  const title = (s.properties && s.properties.title) || '';\n  if (title === 'TEMPLATE') templateSheetId = s.properties.sheetId;\n  if (title === 'QUOTATION') quotationSheetId = s.properties.sheetId;\n}\n\nconst rowData = $('Get Quotation Rows').first().json;\nconst existingRows = (rowData.values || []).length;\nlet startRow = existingRows > 0 ? existingRows + 2 : 1;\n\n// Scan TEMPLATE column A to find row offsets for each label\nconst templateColA = ($('Read Template Labels').first().json.values || [])\n  .map(r => (r[0] || '').trim().toUpperCase());\n\nconst SCAN_LABELS = [\n  'AIR FREIGHT CHARGE',\n  'FUEL SURCHARGE',\n  'SECURITY SURCHARGE',\n  'SCREENING SURCHARGE',\n  'POD :',\n  'AIR CARRIER :',\n  'TRANSIT TIME :'\n];\nconst labelOffsets = {};\nfor (let i = 0; i < templateColA.length; i++) {\n  if (SCAN_LABELS.includes(templateColA[i])) labelOffsets[templateColA[i]] = i;\n}\n\nconst markupRows = $('Read Markup Config').all().map(i => i.json);\nconst minChargeRow = markupRows.find(r => col(r,'WEIGHT BREAK').toUpperCase() === 'MIN CHARGE');\nconst minCharge = minChargeRow ? (parseFloat(col(minChargeRow,'MARKUP')) || 175) : 175;\nconst breaks = markupRows\n  .filter(r => !isNaN(parseFloat(col(r,'WEIGHT BREAK'))))\n  .map(r => ({ wt: parseFloat(col(r,'WEIGHT BREAK')), markup: parseFloat(col(r,'MARKUP')) }))\n  .sort((a,b) => a.wt - b.wt);\n\nfunction getMarkupRate(cw) {\n  const billable = Math.max(45, cw);\n  let rate = breaks.length > 0 ? breaks[0].markup : 2.15;\n  for (const b of breaks) { if (billable >= b.wt) rate = b.markup; }\n  return (rate * billable) < minCharge ? minCharge / billable : rate;\n}\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\nconst emailItems = $('Build Gemini Rate Payload').all();\nconst geminiItems = $input.all();\nconst result = [];\n\nfor (let i = 0; i < geminiItems.length; i++) {\n  const gemini = geminiItems[i].json;\n  const emailData = emailItems[i] ? emailItems[i].json : {};\n\n  const rawText = gemini?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  let rates = { airFreightRatePerKg:0, isAllIn:false, fuelSurchargePerKg:0, securitySurchargePerKg:0, screeningFeePerKg:0, transitTime:'' };\n  try {\n    const cleaned = rawText.replace(/^```json\\s*/i,'').replace(/```\\s*$/i,'').trim();\n    rates = { ...rates, ...JSON.parse(cleaned) };\n  } catch(e) {}\n\n  const quoteNumber = emailData.quoteNumber || '';\n  const messageId = emailData.messageId || '';\n  const logRow = logRows.find(r => col(r,'QUOTE NUMBER').trim() === quoteNumber.trim()) || {};\n\n  const cw = parseFloat(col(logRow,'CW (KGS)')) || 0;\n  const billableCW = Math.max(45, cw);\n\n  // POD: try Quote Log first, then extract from email subject\n  let pod = col(logRow,'DEST') || col(logRow,'POD') || '';\n  if (!pod) {\n    const subj = (emailData.subject || '').replace(/AECQ\\d{8}/i, '');\n    const m = /\\b([A-Z]{3})\\b/.exec(subj.toUpperCase());\n    if (m) pod = m[1];\n  }\n\n  const airlineCode = col(logRow,'AIRLINE').split(',')[0].trim();\n  const transitTime = String(rates.transitTime || '');\n\n  const netRate = parseFloat(rates.airFreightRatePerKg) || 0;\n  const markupRate = getMarkupRate(cw);\n  const sellingAirFreight = Math.round((netRate + markupRate) * 100) / 100;\n\n  const fuelRate   = rates.isAllIn ? 0 : (parseFloat(rates.fuelSurchargePerKg)    || 0);\n  const secRate    = rates.isAllIn ? 0 : (parseFloat(rates.securitySurchargePerKg) || 0);\n  const screenRate = parseFloat(rates.screeningFeePerKg) || 0;\n\n  result.push({ json: {\n    startRow, templateSheetId, quotationSheetId, messageId,\n    labelOffsets,\n    pod, airlineCode, transitTime,\n    sellingAirFreight, billableCW,\n    fuelRate,   fuelUnit:   fuelRate   > 0 ? billableCW : 0,\n    secRate,    secUnit:    secRate    > 0 ? billableCW : 0,\n    screenRate, screenUnit: screenRate > 0 ? billableCW : 0\n  }});\n\n  startRow += 30;\n}\n\nreturn result;"
       },
       "id": "node-compute-quot",
       "name": "Compute Quotation Data",
@@ -251,7 +251,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const d = $input.item.json;\nconst sr = d.startRow;\n\nconst copyBody = JSON.stringify({\n  requests: [{\n    copyPaste: {\n      source:      { sheetId: d.templateSheetId, startRowIndex: 0,      endRowIndex: 30,          startColumnIndex: 0, endColumnIndex: 6 },\n      destination: { sheetId: d.quotationSheetId, startRowIndex: sr - 1, endRowIndex: sr - 1 + 30, startColumnIndex: 0, endColumnIndex: 6 },\n      pasteType: 'PASTE_NORMAL',\n      pasteOrientation: 'NORMAL'\n    }\n  }]\n});\n\nreturn { json: { ...d, copyBody } };"
+        "jsCode": "const d = $input.item.json;\nconst sr = d.startRow;\nconst off = d.labelOffsets;\n\nconst copyBody = JSON.stringify({\n  requests: [{\n    copyPaste: {\n      source:      { sheetId: d.templateSheetId, startRowIndex: 0,      endRowIndex: 30,          startColumnIndex: 0, endColumnIndex: 6 },\n      destination: { sheetId: d.quotationSheetId, startRowIndex: sr - 1, endRowIndex: sr - 1 + 30, startColumnIndex: 0, endColumnIndex: 6 },\n      pasteType: 'PASTE_NORMAL',\n      pasteOrientation: 'NORMAL'\n    }\n  }]\n});\n\n// Build fill entries only for rows found in the template\nconst data = [];\nfunction addFill(label, colRange, values) {\n  if (off[label] !== undefined) {\n    const absRow = sr + off[label];\n    data.push({ range: `QUOTATION!${colRange.replace('R', absRow)}`, values: [values] });\n  }\n}\n\naddFill('AIR FREIGHT CHARGE',  'BR:CR', [d.sellingAirFreight, d.billableCW]);\naddFill('FUEL SURCHARGE',      'BR:CR', [d.fuelRate,          d.fuelUnit]);\naddFill('SECURITY SURCHARGE',  'BR:CR', [d.secRate,           d.secUnit]);\naddFill('SCREENING SURCHARGE', 'BR:CR', [d.screenRate,        d.screenUnit]);\naddFill('POD :',               'BR',    [d.pod]);\naddFill('AIR CARRIER :',       'BR',    [d.airlineCode || '']);\naddFill('TRANSIT TIME :',      'BR',    [d.transitTime]);\n\nconst fillBody = JSON.stringify({ valueInputOption: 'RAW', data });\nreturn { json: { copyBody, fillBody } };"
       },
       "id": "node-prepare-copy",
       "name": "Prepare Copy Payload",
@@ -293,43 +293,6 @@
       "parameters": {
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
-        "method": "GET",
-        "url": "={{ 'https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values/QUOTATION!A' + $('Prepare Copy Payload').item.json.startRow + ':A' + (Number($('Prepare Copy Payload').item.json.startRow) + 29) }}",
-        "options": {}
-      },
-      "id": "node-read-copied",
-      "name": "Read Copied Block",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2000,
-        1050
-      ],
-      "credentials": {
-        "oAuth2Api": {
-          "id": "GOOGLE_OAUTH2_CREDENTIAL_ID",
-          "name": "Google OAuth2 account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const copied = $input.item.json;\nconst prep = $('Prepare Copy Payload').item.json;\nconst sr = prep.startRow;\nconst colA = (copied.values || []).map(r => (r[0] || '').trim().toUpperCase());\n\nconst targets = {\n  'AIR FREIGHT CHARGE':  [prep.sellingAirFreight, prep.billableCW],\n  'FUEL SURCHARGE':      [prep.fuelRate,           prep.fuelUnit],\n  'SECURITY SURCHARGE':  [prep.secRate,            prep.secUnit],\n  'SCREENING SURCHARGE': [prep.screenRate,         prep.screenUnit]\n};\n\nconst data = [];\nfor (let i = 0; i < colA.length; i++) {\n  if (targets[colA[i]]) {\n    const absRow = sr + i;\n    data.push({ range: `QUOTATION!B${absRow}:C${absRow}`, values: [targets[colA[i]]] });\n  }\n}\n\nconst fillBody = JSON.stringify({ valueInputOption: 'RAW', data });\nreturn { json: { fillBody } };"
-      },
-      "id": "node-build-fill-label",
-      "name": "Build Fill By Label",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2250,
-        1050
-      ]
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
         "method": "POST",
         "url": "https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values:batchUpdate",
         "sendBody": true,
@@ -345,6 +308,29 @@
       "position": [
         2500,
         1050
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "GOOGLE_OAUTH2_CREDENTIAL_ID",
+          "name": "Google OAuth2 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "method": "GET",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values/TEMPLATE!A:A",
+        "options": {}
+      },
+      "id": "node-read-template-labels",
+      "name": "Read Template Labels",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        250,
+        1100
       ],
       "credentials": {
         "oAuth2Api": {
@@ -380,6 +366,11 @@
           },
           {
             "node": "Get Rate Emails",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Template Labels",
             "type": "main",
             "index": 0
           }
@@ -450,7 +441,7 @@
       "main": [
         [
           {
-            "node": "Read Copied Block",
+            "node": "Fill Variable Cells",
             "type": "main",
             "index": 0
           }
@@ -462,28 +453,6 @@
         [
           {
             "node": "Copy Template Block",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Copied Block": {
-      "main": [
-        [
-          {
-            "node": "Build Fill By Label",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Fill By Label": {
-      "main": [
-        [
-          {
-            "node": "Fill Variable Cells",
             "type": "main",
             "index": 0
           }
