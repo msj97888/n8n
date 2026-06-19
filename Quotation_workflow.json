@@ -1,5 +1,5 @@
 {
-  "name": "Quotation Workflow",
+  "name": "Quotation_workflow",
   "nodes": [
     {
       "parameters": {
@@ -7,145 +7,31 @@
           "interval": [
             {
               "field": "minutes",
-              "minutesInterval": 5
+              "minutesInterval": 15
             }
           ]
         }
       },
-      "id": "node-quot-trigger",
-      "name": "Poll Quotation Trigger",
+      "id": "1a2b3c4d-0001-0001-0001-000000000001",
+      "name": "Poll Every 15 Min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        0,
-        600
-      ]
+      "position": [0, 300]
     },
     {
       "parameters": {
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Quote Log",
-          "mode": "name"
-        },
-        "options": {}
-      },
-      "id": "node-quot-read-log",
-      "name": "Read Quote Log",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        250,
-        100
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "GSHEETS_CREDENTIAL_ID",
-          "name": "Google Sheets account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Markup Config",
-          "mode": "name"
-        },
-        "options": {}
-      },
-      "id": "node-read-markup",
-      "name": "Read Markup Config",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        250,
-        300
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "GSHEETS_CREDENTIAL_ID",
-          "name": "Google Sheets account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "method": "GET",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M",
-        "options": {}
-      },
-      "id": "node-get-sheet-meta",
-      "name": "Get Sheet Metadata",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        250,
-        500
-      ],
-      "credentials": {
-        "oAuth2Api": {
-          "id": "GOOGLE_OAUTH2_CREDENTIAL_ID",
-          "name": "Google OAuth2 account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "method": "GET",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values/QUOTATION!A:A",
-        "options": {}
-      },
-      "id": "node-get-quot-rows",
-      "name": "Get Quotation Rows",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        250,
-        700
-      ],
-      "credentials": {
-        "oAuth2Api": {
-          "id": "GOOGLE_OAUTH2_CREDENTIAL_ID",
-          "name": "Google OAuth2 account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "resource": "message",
         "operation": "getAll",
         "returnAll": true,
-        "mailboxId": "RATES_RECEIVED_FOLDER_ID",
-        "filters": {},
-        "options": {
-          "fields": "subject,body,bodyPreview,from,receivedDateTime,id,categories"
-        }
+        "filters": {
+          "folderId": "RATES_RECEIVED_FOLDER_ID"
+        },
+        "options": {}
       },
-      "id": "node-get-rate-emails",
+      "id": "1a2b3c4d-0002-0002-0002-000000000002",
       "name": "Get Rate Emails",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [
-        250,
-        900
-      ],
+      "position": [220, 300],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
@@ -155,92 +41,102 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const result = [];\nfor (const item of $input.all()) {\n  const email = item.json;\n  const cats = Array.isArray(email.categories) ? email.categories : [];\n  if (cats.includes('QUOTATION - PROCESSED')) continue;\n\n  const from = (email.from && email.from.emailAddress)\n    ? email.from.emailAddress.address\n    : (email.from || '');\n\n  const rawBody = (email.body && email.body.content)\n    ? email.body.content\n    : (email.bodyPreview || '');\n  const cleanBody = rawBody.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n\n  const quoteMatch = /AECQ\\d{8}/i.exec(email.subject || '');\n  const quoteNumber = quoteMatch ? quoteMatch[0].toUpperCase() : null;\n\n  result.push({ json: { messageId: email.id, from, subject: email.subject || '', cleanBody, quoteNumber } });\n}\nreturn result;"
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "filter-not-processed",
+              "leftValue": "={{ $json.categories ? $json.categories.join(',') : '' }}",
+              "rightValue": "processed",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ]
+        }
       },
-      "id": "node-filter-quot",
-      "name": "Filter Unprocessed Rate Emails",
-      "type": "n8n-nodes-base.code",
+      "id": "1a2b3c4d-0003-0003-0003-000000000003",
+      "name": "Filter Unprocessed",
+      "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
-      "position": [
-        500,
-        900
-      ]
+      "position": [440, 300]
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const email = $input.item.json;\n\nconst payload = {\n  contents: [{\n    role: 'user',\n    parts: [{\n      text: 'Extract air freight rates from this airline rate email. If the rate is described as \"all-in\", set isAllIn to true and set fuelSurchargePerKg and securitySurchargePerKg to 0. If a field is not mentioned, return 0 for numbers and empty string for transitTime.\\n\\nEmail:\\n\\n' + email.cleanBody\n    }]\n  }],\n  generationConfig: {\n    responseMimeType: 'application/json',\n    responseSchema: {\n      type: 'object',\n      properties: {\n        airFreightRatePerKg:    { type: 'number' },\n        isAllIn:                { type: 'boolean' },\n        fuelSurchargePerKg:     { type: 'number' },\n        securitySurchargePerKg: { type: 'number' },\n        screeningFeePerKg:      { type: 'number' },\n        transitTime:            { type: 'string' }\n      },\n      required: ['airFreightRatePerKg','isAllIn','fuelSurchargePerKg','securitySurchargePerKg','screeningFeePerKg','transitTime']\n    }\n  }\n};\n\nreturn { json: { ...email, geminiPayload: payload } };"
+        "jsCode": "// Attach markup config and flatten email fields\nconst config = {\n  markupAirFreightPerKg: 0.50,\n  fuelRatePerKg:         0.10,\n  secRatePerKg:          0.05,\n  screenRatePerKg:       0.10,\n  minChargeableWeight:   45\n};\n\nreturn $input.all().map(item => ({\n  json: {\n    emailId: item.json.id,\n    subject: item.json.subject || '',\n    body:    item.json.body?.content || item.json.bodyPreview || '',\n    from:    item.json.from?.emailAddress?.address || '',\n    config\n  }\n}));"
       },
-      "id": "node-build-gemini-quot",
-      "name": "Build Gemini Rate Payload",
+      "id": "1a2b3c4d-0004-0004-0004-000000000004",
+      "name": "Prepare Email Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        750,
-        900
-      ]
+      "position": [660, 300]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-        "sendHeaders": true,
-        "headerParameters": {
+        "sendQuery": true,
+        "queryParameters": {
           "parameters": [
             {
-              "name": "x-goog-api-key",
-              "value": "YOUR_GEMINI_API_KEY"
+              "name": "key",
+              "value": "GEMINI_API_KEY"
             }
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={{$json.geminiPayload}}"
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  contents: [{\n    parts: [{\n      text: 'You are a freight rate extractor. Read the email below and extract airline rates. Return ONLY valid JSON.\\n\\nEmail Subject: ' + $json.subject + '\\nEmail Body: ' + $json.body + '\\n\\nExtract:\\n- pod: destination airport/city from subject (e.g. LAX, JFK)\\n- airlineCode: airline name or code\\n- transitTime: transit time if mentioned, else empty string\\n- airFreightRatePerKg: base air freight rate per kg as number\\n- fuelRatePerKg: fuel surcharge per kg (0 if not mentioned)\\n- secRatePerKg: security surcharge per kg (0 if not mentioned)\\n- screenRatePerKg: screening surcharge per kg (0 if not mentioned)\\n- chargeableWeightKg: chargeable weight in kg if mentioned, else 0\\n- currency: currency code (default USD)'\n    }]\n  }],\n  generationConfig: {\n    responseMimeType: 'application/json',\n    responseSchema: {\n      type: 'OBJECT',\n      properties: {\n        pod:                  { type: 'STRING' },\n        airlineCode:          { type: 'STRING' },\n        transitTime:          { type: 'STRING' },\n        airFreightRatePerKg:  { type: 'NUMBER' },\n        fuelRatePerKg:        { type: 'NUMBER' },\n        secRatePerKg:         { type: 'NUMBER' },\n        screenRatePerKg:      { type: 'NUMBER' },\n        chargeableWeightKg:   { type: 'NUMBER' },\n        currency:             { type: 'STRING' }\n      },\n      required: ['pod','airlineCode','airFreightRatePerKg','chargeableWeightKg']\n    }\n  }\n}) }}",
+        "options": {}
       },
-      "id": "node-gemini-quot",
-      "name": "Gemini - Extract Rates",
+      "id": "1a2b3c4d-0005-0005-0005-000000000005",
+      "name": "Gemini Extract Rates",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        1000,
-        900
-      ]
+      "position": [880, 300]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "function col(row, name) {\n  const t = name.trim().toUpperCase();\n  for (const [k, v] of Object.entries(row)) {\n    if (k.trim().toUpperCase() === t) return v == null ? '' : String(v).trim();\n  }\n  return '';\n}\n\nconst metadata = $('Get Sheet Metadata').first().json;\nconst sheets = metadata.sheets || [];\nlet templateSheetId = null, quotationSheetId = null;\nfor (const s of sheets) {\n  const title = (s.properties && s.properties.title) || '';\n  if (title === 'TEMPLATE') templateSheetId = s.properties.sheetId;\n  if (title === 'QUOTATION') quotationSheetId = s.properties.sheetId;\n}\n\nconst rowData = $('Get Quotation Rows').first().json;\nconst existingRows = (rowData.values || []).length;\nlet startRow = existingRows > 0 ? existingRows + 2 : 1;\n\n// Scan TEMPLATE column A to find row offsets for each label\nconst templateColA = ($('Read Template Labels').first().json.values || [])\n  .map(r => (r[0] || '').trim().toUpperCase());\n\nconst SCAN_LABELS = [\n  'AIR FREIGHT CHARGE',\n  'FUEL SURCHARGE',\n  'SECURITY SURCHARGE',\n  'SCREENING SURCHARGE',\n  'POD :',\n  'AIR CARRIER :',\n  'TRANSIT TIME :'\n];\nconst labelOffsets = {};\nfor (let i = 0; i < templateColA.length; i++) {\n  if (SCAN_LABELS.includes(templateColA[i])) labelOffsets[templateColA[i]] = i;\n}\n\nconst markupRows = $('Read Markup Config').all().map(i => i.json);\nconst minChargeRow = markupRows.find(r => col(r,'WEIGHT BREAK').toUpperCase() === 'MIN CHARGE');\nconst minCharge = minChargeRow ? (parseFloat(col(minChargeRow,'MARKUP')) || 175) : 175;\nconst breaks = markupRows\n  .filter(r => !isNaN(parseFloat(col(r,'WEIGHT BREAK'))))\n  .map(r => ({ wt: parseFloat(col(r,'WEIGHT BREAK')), markup: parseFloat(col(r,'MARKUP')) }))\n  .sort((a,b) => a.wt - b.wt);\n\nfunction getMarkupRate(cw) {\n  const billable = Math.max(45, cw);\n  let rate = breaks.length > 0 ? breaks[0].markup : 2.15;\n  for (const b of breaks) { if (billable >= b.wt) rate = b.markup; }\n  return (rate * billable) < minCharge ? minCharge / billable : rate;\n}\n\nconst logRows = $('Read Quote Log').all().map(i => i.json);\nconst emailItems = $('Build Gemini Rate Payload').all();\nconst geminiItems = $input.all();\nconst result = [];\n\nfor (let i = 0; i < geminiItems.length; i++) {\n  const gemini = geminiItems[i].json;\n  const emailData = emailItems[i] ? emailItems[i].json : {};\n\n  const rawText = gemini?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  let rates = { airFreightRatePerKg:0, isAllIn:false, fuelSurchargePerKg:0, securitySurchargePerKg:0, screeningFeePerKg:0, transitTime:'' };\n  try {\n    const cleaned = rawText.replace(/^```json\\s*/i,'').replace(/```\\s*$/i,'').trim();\n    rates = { ...rates, ...JSON.parse(cleaned) };\n  } catch(e) {}\n\n  const quoteNumber = emailData.quoteNumber || '';\n  const messageId = emailData.messageId || '';\n  const logRow = logRows.find(r => col(r,'QUOTE NUMBER').trim() === quoteNumber.trim()) || {};\n\n  const cw = parseFloat(col(logRow,'CW (KGS)')) || 0;\n  const billableCW = Math.max(45, cw);\n\n  // POD: try Quote Log first, then extract from email subject\n  let pod = col(logRow,'DEST') || col(logRow,'POD') || '';\n  if (!pod) {\n    const subj = (emailData.subject || '').replace(/AECQ\\d{8}/i, '');\n    const m = /\\b([A-Z]{3})\\b/.exec(subj.toUpperCase());\n    if (m) pod = m[1];\n  }\n\n  const airlineCode = col(logRow,'AIRLINE').split(',')[0].trim();\n  const transitTime = String(rates.transitTime || '');\n\n  const netRate = parseFloat(rates.airFreightRatePerKg) || 0;\n  const markupRate = getMarkupRate(cw);\n  const sellingAirFreight = Math.round((netRate + markupRate) * 100) / 100;\n\n  const fuelRate   = rates.isAllIn ? 0 : (parseFloat(rates.fuelSurchargePerKg)    || 0);\n  const secRate    = rates.isAllIn ? 0 : (parseFloat(rates.securitySurchargePerKg) || 0);\n  const screenRate = parseFloat(rates.screeningFeePerKg) || 0;\n\n  result.push({ json: {\n    startRow, templateSheetId, quotationSheetId, messageId,\n    labelOffsets,\n    pod, airlineCode, transitTime,\n    sellingAirFreight, billableCW,\n    fuelRate,   fuelUnit:   fuelRate   > 0 ? billableCW : 0,\n    secRate,    secUnit:    secRate    > 0 ? billableCW : 0,\n    screenRate, screenUnit: screenRate > 0 ? billableCW : 0\n  }});\n\n  startRow += 30;\n}\n\nreturn result;"
+        "jsCode": "const results = [];\n\nfor (let i = 0; i < $input.all().length; i++) {\n  const geminiItem = $input.all()[i];\n  const prepItem   = $('Prepare Email Data').all()[i];\n  const config     = prepItem?.json?.config || {};\n\n  // Parse Gemini JSON response\n  let extracted = {};\n  try {\n    const text = geminiItem.json?.candidates?.[0]?.content?.parts?.[0]?.text;\n    extracted = JSON.parse(text);\n  } catch (e) {\n    extracted = geminiItem.json || {};\n  }\n\n  const cwRaw    = extracted.chargeableWeightKg || 0;\n  const billableCW = Math.max(config.minChargeableWeight || 45, cwRaw);\n  const sellingAirFreight = (extracted.airFreightRatePerKg || 0) + (config.markupAirFreightPerKg || 0.50);\n  const fuelRate   = Math.max(extracted.fuelRatePerKg   || 0, config.fuelRatePerKg   || 0.10);\n  const secRate    = Math.max(extracted.secRatePerKg    || 0, config.secRatePerKg    || 0.05);\n  const screenRate = Math.max(extracted.screenRatePerKg || 0, config.screenRatePerKg || 0.10);\n\n  results.push({\n    json: {\n      token:             'REPLACE_WITH_YOUR_SECRET_TOKEN',\n      pod:               extracted.pod         || '',\n      airlineCode:       extracted.airlineCode || '',\n      transitTime:       extracted.transitTime || '',\n      sellingAirFreight: sellingAirFreight,\n      billableCW:        billableCW,\n      fuelRate:          fuelRate,\n      fuelUnit:          'PER KG',\n      secRate:           secRate,\n      secUnit:           'PER KG',\n      screenRate:        screenRate,\n      screenUnit:        'PER KG',\n      emailId:           prepItem?.json?.emailId || ''\n    }\n  });\n}\n\nreturn results;"
       },
-      "id": "node-compute-quot",
+      "id": "1a2b3c4d-0006-0006-0006-000000000006",
       "name": "Compute Quotation Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1250,
-        900
-      ]
+      "position": [1100, 300]
     },
     {
       "parameters": {
-        "resource": "message",
+        "method": "POST",
+        "url": "APPS_SCRIPT_WEB_APP_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "1a2b3c4d-0007-0007-0007-000000000007",
+      "name": "Call Apps Script",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 180]
+    },
+    {
+      "parameters": {
         "operation": "update",
-        "messageId": "={{$json.messageId}}",
+        "messageId": "={{ $('Compute Quotation Data').item.json.emailId }}",
         "updateFields": {
-          "categories": [
-            "QUOTATION - PROCESSED"
-          ]
+          "categories": ["processed"]
         }
       },
-      "id": "node-mark-quot-processed",
+      "id": "1a2b3c4d-0008-0008-0008-000000000008",
       "name": "Mark Email Processed",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [
-        1500,
-        700
-      ],
+      "position": [1320, 420],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "OUTLOOK_CREDENTIAL_ID",
@@ -250,213 +146,67 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const d = $input.item.json;\nconst sr = d.startRow;\nconst off = d.labelOffsets;\n\nconst copyBody = JSON.stringify({\n  requests: [{\n    copyPaste: {\n      source:      { sheetId: d.templateSheetId, startRowIndex: 0,      endRowIndex: 30,          startColumnIndex: 0, endColumnIndex: 6 },\n      destination: { sheetId: d.quotationSheetId, startRowIndex: sr - 1, endRowIndex: sr - 1 + 30, startColumnIndex: 0, endColumnIndex: 6 },\n      pasteType: 'PASTE_NORMAL',\n      pasteOrientation: 'NORMAL'\n    }\n  }]\n});\n\n// Build fill entries only for rows found in the template\nconst data = [];\nfunction addFill(label, colRange, values) {\n  if (off[label] !== undefined) {\n    const absRow = sr + off[label];\n    data.push({ range: `QUOTATION!${colRange.replace('R', absRow)}`, values: [values] });\n  }\n}\n\naddFill('AIR FREIGHT CHARGE',  'BR:CR', [d.sellingAirFreight, d.billableCW]);\naddFill('FUEL SURCHARGE',      'BR:CR', [d.fuelRate,          d.fuelUnit]);\naddFill('SECURITY SURCHARGE',  'BR:CR', [d.secRate,           d.secUnit]);\naddFill('SCREENING SURCHARGE', 'BR:CR', [d.screenRate,        d.screenUnit]);\naddFill('POD :',               'BR',    [d.pod]);\naddFill('AIR CARRIER :',       'BR',    [d.airlineCode || '']);\naddFill('TRANSIT TIME :',      'BR',    [d.transitTime]);\n\nconst fillBody = JSON.stringify({ valueInputOption: 'RAW', data });\nreturn { json: { copyBody, fillBody } };"
+        "jsCode": "for (const item of $input.all()) {\n  const res = item.json;\n  if (res.status !== 'ok') {\n    throw new Error('Apps Script error: ' + (res.message || JSON.stringify(res)));\n  }\n  console.log('Quotation written at row:', res.startRow);\n}\nreturn $input.all();"
       },
-      "id": "node-prepare-copy",
-      "name": "Prepare Copy Payload",
+      "id": "1a2b3c4d-0009-0009-0009-000000000009",
+      "name": "Check Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1500,
-        1050
-      ]
+      "position": [1540, 180]
     },
     {
       "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "method": "POST",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M:batchUpdate",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{$json.copyBody}}",
-        "options": {}
+        "jsCode": "for (const item of $input.all()) {\n  console.log('Email marked processed:', item.json.id || item.json.emailId || 'ok');\n}\nreturn $input.all();"
       },
-      "id": "node-copy-template",
-      "name": "Copy Template Block",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1750,
-        1050
-      ],
-      "credentials": {
-        "oAuth2Api": {
-          "id": "GOOGLE_OAUTH2_CREDENTIAL_ID",
-          "name": "Google OAuth2 account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "method": "POST",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values:batchUpdate",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{$json.fillBody}}",
-        "options": {}
-      },
-      "id": "node-fill-cells",
-      "name": "Fill Variable Cells",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2500,
-        1050
-      ],
-      "credentials": {
-        "oAuth2Api": {
-          "id": "GOOGLE_OAUTH2_CREDENTIAL_ID",
-          "name": "Google OAuth2 account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "method": "GET",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values/TEMPLATE!A:A",
-        "options": {}
-      },
-      "id": "node-read-template-labels",
-      "name": "Read Template Labels",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        250,
-        1100
-      ],
-      "credentials": {
-        "oAuth2Api": {
-          "id": "GOOGLE_OAUTH2_CREDENTIAL_ID",
-          "name": "Google OAuth2 account"
-        }
-      }
+      "id": "1a2b3c4d-0010-0010-0010-000000000010",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 420]
     }
   ],
   "connections": {
-    "Poll Quotation Trigger": {
+    "Poll Every 15 Min": {
       "main": [
-        [
-          {
-            "node": "Read Quote Log",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Read Markup Config",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Sheet Metadata",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Quotation Rows",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Rate Emails",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Read Template Labels",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Get Rate Emails", "type": "main", "index": 0 }]
       ]
     },
     "Get Rate Emails": {
       "main": [
-        [
-          {
-            "node": "Filter Unprocessed Rate Emails",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Filter Unprocessed", "type": "main", "index": 0 }]
       ]
     },
-    "Filter Unprocessed Rate Emails": {
+    "Filter Unprocessed": {
       "main": [
-        [
-          {
-            "node": "Build Gemini Rate Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Prepare Email Data", "type": "main", "index": 0 }]
       ]
     },
-    "Build Gemini Rate Payload": {
+    "Prepare Email Data": {
       "main": [
-        [
-          {
-            "node": "Gemini - Extract Rates",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Gemini Extract Rates", "type": "main", "index": 0 }]
       ]
     },
-    "Gemini - Extract Rates": {
+    "Gemini Extract Rates": {
       "main": [
-        [
-          {
-            "node": "Compute Quotation Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Compute Quotation Data", "type": "main", "index": 0 }]
       ]
     },
     "Compute Quotation Data": {
       "main": [
         [
-          {
-            "node": "Mark Email Processed",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Prepare Copy Payload",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Call Apps Script", "type": "main", "index": 0 },
+          { "node": "Mark Email Processed", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Copy Template Block": {
+    "Call Apps Script": {
       "main": [
-        [
-          {
-            "node": "Fill Variable Cells",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Check Response", "type": "main", "index": 0 }]
       ]
     },
-    "Prepare Copy Payload": {
+    "Mark Email Processed": {
       "main": [
-        [
-          {
-            "node": "Copy Template Block",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Done", "type": "main", "index": 0 }]
       ]
     }
   },
@@ -464,9 +214,8 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [],
   "meta": {
-    "templateCredsSetupCompleted": false,
-    "n8nVersion": "1.0.0"
-  }
+    "instanceId": "1m1h-quotation-hybrid"
+  },
+  "pinData": {}
 }
