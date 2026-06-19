@@ -294,7 +294,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "method": "GET",
-        "url": "={'https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values/QUOTATION!A' + $('Prepare Copy Payload').item.json.startRow + ':A' + (Number($('Prepare Copy Payload').item.json.startRow) + 29)}",
+        "url": "={{ 'https://sheets.googleapis.com/v4/spreadsheets/1hFwG8hSnGDQV9AOUv8hXTFq0HUDBlyOYtxDEHfPLx2M/values/QUOTATION!A' + $('Prepare Copy Payload').item.json.startRow + ':A' + (Number($('Prepare Copy Payload').item.json.startRow) + 29) }}",
         "options": {}
       },
       "id": "node-read-copied",
